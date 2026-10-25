@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#121d2a">
+<title>Disc Display Remote</title>
+<style>
+:root{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:#eef4f5;background:#121d2a}
+*{box-sizing:border-box}body{margin:0}main{max-width:560px;margin:auto;padding:24px 18px 60px}
+header{display:flex;align-items:center;justify-content:space-between;gap:16px}
+h1{margin:0;font-size:1.42rem;letter-spacing:.015em}h2{font-size:1rem;font-weight:600;color:#d1dadb;margin:0 0 14px}
+small,.muted{color:#a6b8bf}.eyebrow{font-size:.74rem;text-transform:uppercase;letter-spacing:.11em;color:#9fb2bb}
+.panel{border:1px solid #304151;background:#1a2b39;border-radius:18px;padding:20px;margin-top:18px}
+button,select,input{font:inherit}button{background:#34516a;color:#fff;border:1px solid #65859a;border-radius:12px;padding:12px 16px;cursor:pointer;min-height:48px}
+button:active{transform:scale(.985)}button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:#dfb570;color:#1e2530;border-color:#eccc97;font-weight:700}
+button.subtle{background:#1b2f40}button.round{font-size:1.5rem;flex:1}
+.controls{display:flex;gap:10px;justify-content:space-between}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.grid button{padding:10px 6px;font-size:.9rem}
+h3{font-size:1.2rem;margin:8px 0;overflow-wrap:anywhere}
+.track{text-align:center;padding:8px 0 20px;font-size:.95rem;color:#a7bec7}
+.value{font-variant-numeric:tabular-nums}#alert{min-height:1.3em;color:#dcb570;font-size:.88rem;margin-top:12px}
+#connect{min-width:134px}#connection{font-size:.81rem;line-height:1.4}
+.range{width:100%;accent-color:#dfb570}.spread{display:flex;justify-content:space-between;gap:12px;align-items:center}
+.catalogue-row{padding:10px 0;border-bottom:1px solid #354657;display:flex;justify-content:space-between;gap:12px;align-items:center}
+.catalogue-row:last-child{border:0}.catalogue-row button{max-width:110px;font-size:.78rem;padding:5px 10px}
+.catalogue-row span{font-size:.9rem;overflow-wrap:anywhere}
+input[type=number]{width:76px;min-height:46px;border-radius:10px;background:#102332;color:#fff;border:1px solid #65859a;padding:8px}
+footer{margin-top:25px;font-size:.78rem;line-height:1.5;color:#acbbc2}
+</style>
+</head>
+<body><main>
+<header><div><div class="eyebrow">SD music · BLE control</div><h1>Disc Display Remote</h1></div>
+<button id="connect" class="primary">Connect</button></header>
+<p id="connection" class="muted" role="status">Not connected. Use Chrome on Android or desktop over HTTPS.</p>
+<div class="panel">
+<div class="eyebrow">Selected disc <strong id="slot" class="value">—</strong></div>
+<h3 id="album">Connect to load your collection</h3>
+<div class="eyebrow" id="printedTrack">Programme number —</div>
+<h3 id="songTitle" style="margin:8px 0 2px">No track selected</h3>
+<div class="muted" id="songArtist" style="margin-bottom:12px">—</div>
+<div class="track">WAV <span id="track" class="value">—</span> · <span id="elapsed" class="value">0:00</span> / <span id="duration">—</span></div>
+<div class="controls">
+<button id="prev" class="round" title="Previous near the start / restart otherwise">⏮</button>
+<button id="play" class="round primary" title="Play">▶</button>
+<button id="pause" class="round" title="Pause">⏸</button>
+<button id="next" class="round" title="Next track">⏭</button>
+</div>
+<div class="spread" style="margin-top:22px"><label for="volume">Speaker volume</label><output id="volumeLabel">—</output></div>
+<input id="volume" class="range" type="range" min="0" max="127" value="30">
+</div>
+<div class="panel">
+<h2>Library and display</h2>
+<div class="grid">
+<button id="discNext">Next disc</button>
+<button id="discRow">Next row</button>
+<button id="default">Default artwork</button>
+<button id="mode1">E-ink</button>
+<button id="mode2">LED</button>
+<button id="mode3">Audio</button>
+</div>
+<div class="spread" style="margin-top:18px">
+<div><label for="directAlbum">Go to disc</label><br><small>00–61, if present</small></div>
+<div class="controls"><input id="directAlbum" type="number" min="0" max="99" value="35"><button id="goAlbum">Select</button></div>
+</div>
+</div>
+<div class="panel">
+<div class="spread"><h2>Carousel</h2><span id="carouselStatus" class="muted">—</span></div>
+<div class="grid"><button id="carousel">On / Off</button><button id="faster">Faster</button><button id="slower">Slower</button></div>
+</div>
+<div class="panel">
+<div class="spread"><h2>Browse catalogue</h2><span id="pageStatus" class="muted"></span></div>
+<div id="catalogue">Connect to browse available discs.</div>
+<div class="controls" style="margin-top:14px"><button id="pagePrev">Previous page</button><button id="pageNext">Next page</button></div>
+</div>
+<p id="alert" aria-live="polite"></p>
+<footer>Android: open in Chrome. iPhone: open the same HTTPS page in Bluefy, not Safari. The firmware and this page must both support the Now Playing characteristic (UUID ending 0005). This is an experimental local Bluetooth remote. The first firmware build does not enforce authenticated pairing; do not leave it enabled in a public setting. BLE controls SD music on the disc display; it does not stream phone audio. If the webpage can't access Bluetooth, use a BLE GATT testing app instead. The webpage requires HTTPS or localhost.</footer>
+</main>
+<script>
+"use strict";
+const SERVICE="aba54e10-58de-4f40-b0c8-d65de1250001";
+const COMMAND="aba54e10-58de-4f40-b0c8-d65de1250002";
+const STATUS="aba54e10-58de-4f40-b0c8-d65de1250003";
+const CATALOGUE="aba54e10-58de-4f40-b0c8-d65de1250004";
+const NOWPLAYING="aba54e10-58de-4f40-b0c8-d65de1250005";
+let device=null,server=null,cmd=null,status=null,cat=null,nowPlaying=null,page=0,rawStatus="",busy=false;
+const $=id=>document.getElementById(id);
+const decode=value=>new TextDecoder().decode(value);
+const toast=(t)=>{$("alert").textContent=t};
+const connected=()=>!!server?.connected;
+function updateConnection() {
+ $("connection").textContent=connected()?"Connected to "+device.name:"Disconnected";
+ $("connect").textContent=connected()?"Disconnect":"Connect";
+}
+async function send(message) {
+ if(!connected()||!cmd) {toast("Connect to Disc Display Remote first.");return false;}
+ try{
+  await cmd.writeValueWithResponse(new TextEncoder().encode(message));
+  return true;
+ }catch(e){toast("BLE command failed: "+e.message);return false;}
+}
+function consumeStatus(raw){
+ if(!raw||raw===rawStatus)return;rawStatus=raw;
+ const fields=Object.fromEntries(raw.split(";").map(pair=>{let n=pair.indexOf("=");return [pair.slice(0,n),pair.slice(n+1)]}));
+ $("slot").textContent=fields.slot??"—";
+ $("album").textContent=fields.album||"No album";
+ $("track").textContent=fields.track||"0";
+ const seconds=Number(fields.seconds||0);
+ $("elapsed").textContent=Math.floor(seconds/60)+":"+String(seconds%60).padStart(2,"0");
+ $("volumeLabel").textContent=fields.volume||"—";
+ if(document.activeElement!==$("volume"))$("volume").value=fields.volume||0;
+ $("carouselStatus").textContent=fields.car==="1"?"On":"Off";
+ for(let i=1;i<=3;++i)$("mode"+i).style.borderColor=fields.mode===String(i)?"#eccc97":"#65859a";
+}
+function consumeNowPlaying(value){
+ try{
+  const data=JSON.parse(value);
+  $("songTitle").textContent=data.t||"No track selected";
+  $("songArtist").textContent=data.a||"—";
+  $("printedTrack").textContent=data.p?"Programme "+data.p:"Programme number not provided";
+  $("track").textContent=(data.w||0)+" / "+(data.n||0);
+  const seconds=Number(data.d||0);
+  $("duration").textContent=seconds?Math.floor(seconds/60)+":"+String(seconds%60).padStart(2,"0"):"—";
+ }catch(err){console.warn("Unparseable Now Playing notification",err);}
+}
+function onNowPlaying(e){consumeNowPlaying(decode(e.target.value))}
+function onStatus(e){consumeStatus(decode(e.target.value))}
+async function refreshStatus(){
+ if(!connected())return;
+ try{consumeStatus(decode(await status.readValue()))}catch(e){}
+}
+async function fetchPage(next){
+ if(!connected()||busy)return;busy=true;
+ page=Math.max(0,Math.min(99,next));
+ if(!await send("PAGE:"+page)){busy=false;return;}
+ try {
+  let txt="";
+  for(let i=0;i<6;++i){
+   await new Promise(r=>setTimeout(r,170));
+   txt=decode(await cat.readValue());
+   if(txt.startsWith("page="+page+";"))break;
+  }
+  const lines=txt.split("\n"), metadata=lines.shift()||"";
+  if(!metadata.startsWith("page="+page+";")){toast("Catalogue page not ready; try again.");busy=false;return;}
+  const count=Number((metadata.match(/count=(\d+)/)||[])[1]||0);
+  $("pageStatus").textContent="Page "+(page+1)+" / "+Math.max(1,Math.ceil(count/3));
+  const root=$("catalogue");root.replaceChildren();
+  for(const row of lines){
+   if(!row.includes("|"))continue;
+   const [slot,name,tracks]=row.split("|");
+   const wrap=document.createElement("div");wrap.className="catalogue-row";
+   const label=document.createElement("span");label.textContent=slot+" · "+name+" ("+tracks+" tracks)";
+   const select=document.createElement("button");select.textContent="Select";
+   select.onclick=()=>send("ALBUM:"+slot);
+   wrap.append(label,select);root.append(wrap);
+  }
+  if(!root.children.length)root.textContent="No albums on this page.";
+  $("pagePrev").disabled=page===0;
+  $("pageNext").disabled=(page+1)*3>=count;
+ }catch(e){toast("Catalogue read failed: "+e.message)}
+ busy=false;
+}
+async function connect(){
+ if(connected()){server.disconnect();updateConnection();return;}
+ if(!navigator.bluetooth){toast("Web Bluetooth is unavailable. Use Android Chrome over HTTPS or a BLE scanner app.");return;}
+ try{
+  device=await navigator.bluetooth.requestDevice({filters:[{namePrefix:"Disc Display Remote"}],optionalServices:[SERVICE]});
+  device.addEventListener("gattserverdisconnected",()=>{updateConnection();toast("Device disconnected.")});
+  server=await device.gatt.connect();
+  const service=await server.getPrimaryService(SERVICE);
+  cmd=await service.getCharacteristic(COMMAND);
+  status=await service.getCharacteristic(STATUS);
+  cat=await service.getCharacteristic(CATALOGUE);
+  nowPlaying=await service.getCharacteristic(NOWPLAYING);
+  await status.startNotifications();
+  status.addEventListener("characteristicvaluechanged",onStatus);
+  await nowPlaying.startNotifications();
+  nowPlaying.addEventListener("characteristicvaluechanged",onNowPlaying);
+  updateConnection();toast("Connected. Album and track commands are live.");
+  await refreshStatus();
+  consumeNowPlaying(decode(await nowPlaying.readValue()));
+  await fetchPage(0);
+ }catch(e){toast("BLE connection failed: "+e.message);updateConnection()}
+}
+$("connect").onclick=connect;
+const actions={prev:"PREV",play:"PLAY",pause:"PAUSE",next:"NEXTTRACK",discNext:"NEXT",discRow:"ROW",default:"DEFAULT",mode1:"MODE:1",mode2:"MODE:2",mode3:"MODE:3",carousel:"CAROUSEL",faster:"FASTER",slower:"SLOWER"};
+for(const [id,command] of Object.entries(actions))$(id).onclick=()=>send(command);
+$("goAlbum").onclick=()=>{
+ const n=Number($("directAlbum").value);
+ if(Number.isInteger(n)&&n>=0&&n<=99)send("ALBUM:"+n);
+};
+let volumeDelay;
+$("volume").oninput=e=>{
+ $("volumeLabel").textContent=e.target.value;
+ clearTimeout(volumeDelay);
+ volumeDelay=setTimeout(()=>send("VOL:"+e.target.value),220);
+};
+$("pagePrev").onclick=()=>fetchPage(page-1);
+$("pageNext").onclick=()=>fetchPage(page+1);
+updateConnection();
+</script>
+</body></html>
