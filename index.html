@@ -75,8 +75,27 @@ footer{margin-top:25px;font-size:.78rem;line-height:1.5;color:#acbbc2}
 <div id="catalogue">Connect to browse available discs.</div>
 <div class="controls" style="margin-top:14px"><button id="pagePrev">Previous page</button><button id="pageNext">Next page</button></div>
 </div>
+<div class="panel">
+<div class="spread"><h2>Diagnostics (BLE Serial monitor)</h2><span id="logState" class="muted">Not connected</span></div>
+<p class="muted" style="font-size:.83rem">Captures firmware messages from startup in ESP32 RAM. Replay retrieves early SD/e-ink errors even without USB. Streaming is opt-in.</p>
+<div class="grid">
+<button id="logReplay">Replay boot log</button>
+<button id="logFollow">Replay + follow</button>
+<button id="logLive">Live only</button>
+<button id="logStop">Stop stream</button>
+<button id="diagSd">SD info</button>
+<button id="diagEpd">E-ink info</button>
+<button id="diagAvrcp">AVRCP info</button>
+<button id="diagStatus">Status</button>
+<button id="logCopy">Copy log</button>
+</div>
+<div class="spread" style="margin-top:12px"><label for="logText">Diagnostic output</label><button class="subtle" id="logClear" style="min-height:36px;padding:6px 12px">Clear view</button></div>
+<textarea id="logText" readonly spellcheck="false" aria-label="Diagnostic Serial output"
+ style="width:100%;height:245px;resize:vertical;margin-top:8px;background:#0c1924;color:#dce8e8;border:1px solid #536676;border-radius:12px;padding:12px;font:12px/1.4 monospace" placeholder="Connect, then tap Replay boot log."></textarea>
+<small>Only this sketch's captured Serial messages are available, up to the RAM ring limit. Bootloader and library-internal logs aren't included. The log is lost when ESP32 resets.</small>
+</div>
 <p id="alert" aria-live="polite"></p>
-<footer>Android: open in Chrome. iPhone: open the same HTTPS page in Bluefy, not Safari. The firmware and this page must both support the Now Playing characteristic (UUID ending 0005). This is an experimental local Bluetooth remote. The first firmware build does not enforce authenticated pairing; do not leave it enabled in a public setting. BLE controls SD music on the disc display; it does not stream phone audio. If the webpage can't access Bluetooth, use a BLE GATT testing app instead. The webpage requires HTTPS or localhost.</footer>
+<footer>Android: open in Chrome. iPhone: open the same HTTPS page in Bluefy, not Safari. The firmware and this page must support Now Playing (UUID 0005); log replay requires newer firmware with diagnostic characteristic 0006. This is an experimental local Bluetooth remote. The first firmware build does not enforce authenticated pairing; do not leave it enabled in a public setting. BLE controls SD music on the disc display; it does not stream phone audio. If the webpage can't access Bluetooth, use a BLE GATT testing app instead. The webpage requires HTTPS or localhost.</footer>
 </main>
 <script>
 "use strict";
@@ -85,7 +104,10 @@ const COMMAND="aba54e10-58de-4f40-b0c8-d65de1250002";
 const STATUS="aba54e10-58de-4f40-b0c8-d65de1250003";
 const CATALOGUE="aba54e10-58de-4f40-b0c8-d65de1250004";
 const NOWPLAYING="aba54e10-58de-4f40-b0c8-d65de1250005";
-let device=null,server=null,cmd=null,status=null,cat=null,nowPlaying=null,page=0,rawStatus="",busy=false;
+const DIAGNOSTIC="aba54e10-58de-4f40-b0c8-d65de1250006";
+let device=null,server=null,cmd=null,status=null,cat=null,nowPlaying=null,diagnostic=null,page=0,rawStatus="",busy=false;
+const diagnosticDecoder=new TextDecoder();
+
 const $=id=>document.getElementById(id);
 const decode=value=>new TextDecoder().decode(value);
 const toast=(t)=>{$("alert").textContent=t};
@@ -124,6 +146,14 @@ function consumeNowPlaying(value){
   const seconds=Number(data.d||0);
   $("duration").textContent=seconds?Math.floor(seconds/60)+":"+String(seconds%60).padStart(2,"0"):"—";
  }catch(err){console.warn("Unparseable Now Playing notification",err);}
+}
+function onDiagnostic(e) {
+ const chunk=diagnosticDecoder.decode(e.target.value,{stream:true});
+ const display=$("logText");
+ display.value+=chunk;
+ if(display.value.length>90000)
+   display.value="[Phone view trimmed to last 90 KB]\n"+display.value.slice(-80000);
+ display.scrollTop=display.scrollHeight;
 }
 function onNowPlaying(e){consumeNowPlaying(decode(e.target.value))}
 function onStatus(e){consumeStatus(decode(e.target.value))}
@@ -174,11 +204,21 @@ async function connect(){
   status=await service.getCharacteristic(STATUS);
   cat=await service.getCharacteristic(CATALOGUE);
   nowPlaying=await service.getCharacteristic(NOWPLAYING);
+  diagnostic=null;
+  try {
+   diagnostic=await service.getCharacteristic(DIAGNOSTIC);
+   await diagnostic.startNotifications();
+   diagnostic.addEventListener("characteristicvaluechanged",onDiagnostic);
+   $("logState").textContent="Ready · replay available";
+  } catch(err) {
+   $("logState").textContent="Firmware does not support diagnostics";
+  }
   await status.startNotifications();
   status.addEventListener("characteristicvaluechanged",onStatus);
   await nowPlaying.startNotifications();
   nowPlaying.addEventListener("characteristicvaluechanged",onNowPlaying);
   updateConnection();toast("Connected. Album and track commands are live.");
+  await send("TIME:"+Math.floor(Date.now()/1000));
   await refreshStatus();
   consumeNowPlaying(decode(await nowPlaying.readValue()));
   await fetchPage(0);
@@ -199,6 +239,27 @@ $("volume").oninput=e=>{
 };
 $("pagePrev").onclick=()=>fetchPage(page-1);
 $("pageNext").onclick=()=>fetchPage(page+1);
+const logActions={
+ logReplay:["LOG:REPLAY","Replaying boot log"],
+ logFollow:["LOG:FOLLOW","Replaying and following live log"],
+ logLive:["LOG:LIVE","Streaming new log lines"],
+ logStop:["LOG:STOP","Log stream stopped"],
+ diagSd:["DIAG:SD","SD diagnostic requested"],
+ diagEpd:["DIAG:EPD","E-ink diagnostic requested"],
+ diagAvrcp:["DIAG:AVRCP","AVRCP diagnostic requested"],
+ diagStatus:["DIAG:STATUS","Status requested"]
+};
+for(const [id,[command,state]] of Object.entries(logActions)){
+ $(id).onclick=async()=>{
+  if(!diagnostic){toast("Update ESP32 firmware to enable BLE diagnostics.");return;}
+  if(await send(command))$("logState").textContent=state;
+ };
+}
+$("logCopy").onclick=async()=>{
+ try{await navigator.clipboard.writeText($("logText").value);toast("Diagnostic log copied.");}
+ catch(err){$("logText").select();toast("Select and copy the log manually.");}
+};
+$("logClear").onclick=()=>{$("logText").value="";};
 updateConnection();
 </script>
 </body></html>
