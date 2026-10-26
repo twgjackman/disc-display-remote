@@ -83,6 +83,7 @@ footer{margin-top:25px;font-size:.78rem;line-height:1.5;color:#acbbc2}
 <button id="logFollow">Replay + follow</button>
 <button id="logLive">Live only</button>
 <button id="logStop">Stop stream</button>
+<button id="logInfo">Buffer info</button>
 <button id="diagSd">SD info</button>
 <button id="diagEpd">E-ink info</button>
 <button id="diagAvrcp">AVRCP info</button>
@@ -244,6 +245,7 @@ const logActions={
  logFollow:["LOG:FOLLOW","Replaying and following live log"],
  logLive:["LOG:LIVE","Streaming new log lines"],
  logStop:["LOG:STOP","Log stream stopped"],
+ logInfo:["LOG:INFO","Reporting diagnostic buffer usage"],
  diagSd:["DIAG:SD","SD diagnostic requested"],
  diagEpd:["DIAG:EPD","E-ink diagnostic requested"],
  diagAvrcp:["DIAG:AVRCP","AVRCP diagnostic requested"],
