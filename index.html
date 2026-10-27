@@ -90,13 +90,27 @@ footer{margin-top:25px;font-size:.78rem;line-height:1.5;color:#acbbc2}
 <button id="diagStatus">Status</button>
 <button id="logCopy">Copy log</button>
 </div>
+<div style="margin-top:16px;border-top:1px solid #354657;padding-top:14px">
+<h2>Test system signals (experimental)</h2>
+<p class="muted" style="font-size:.82rem">Send the same simulated system events as USB Serial Monitor: idle/wake, low battery/OK, USB plug in/out and headphone jack in/out. These are not real voltage, USB or jack sensors. Test-event firmware only.</p>
+<div class="grid">
+<button id="simIdle">Idle</button><button id="simWake">Wake</button>
+<button id="simLow">Battery low</button><button id="simOk">Battery OK</button>
+<button id="simPlugIn">Plug in USB</button><button id="simPlugOut">Unplug USB</button>
+</div>
+<div class="spread" style="margin-top:12px">
+<input id="debugLine" style="flex:1;min-width:0;min-height:46px;border-radius:10px;background:#102332;color:#fff;border:1px solid #65859a;padding:8px" aria-label="Supported Serial Monitor test command" placeholder="!idle or !jack-in" autocomplete="off">
+<button id="debugSend">Send</button>
+</div>
+<small>Allowed: !idle, !wake, !battery-low, !battery-ok, !usb-in, !usb-out, !plug-in, !plug-out, !jack-in, !jack-out, !resume. Other Serial commands are intentionally not forwarded for safety.</small>
+</div>
 <div class="spread" style="margin-top:12px"><label for="logText">Diagnostic output</label><button class="subtle" id="logClear" style="min-height:36px;padding:6px 12px">Clear view</button></div>
 <textarea id="logText" readonly spellcheck="false" aria-label="Diagnostic Serial output"
  style="width:100%;height:245px;resize:vertical;margin-top:8px;background:#0c1924;color:#dce8e8;border:1px solid #536676;border-radius:12px;padding:12px;font:12px/1.4 monospace" placeholder="Connect, then tap Replay boot log."></textarea>
 <small>Only this sketch's captured Serial messages are available, up to the RAM ring limit. Bootloader and library-internal logs aren't included. The log is lost when ESP32 resets.</small>
 </div>
 <p id="alert" aria-live="polite"></p>
-<footer>Android: open in Chrome. iPhone: open the same HTTPS page in Bluefy, not Safari. The firmware and this page must support Now Playing (UUID 0005); log replay requires newer firmware with diagnostic characteristic 0006. This is an experimental local Bluetooth remote. The first firmware build does not enforce authenticated pairing; do not leave it enabled in a public setting. BLE controls SD music on the disc display; it does not stream phone audio. If the webpage can't access Bluetooth, use a BLE GATT testing app instead. The webpage requires HTTPS or localhost.</footer>
+<footer>Android: open in Chrome. iPhone: open the same HTTPS page in Bluefy, not Safari. The firmware and this page must both support the Now Playing characteristic (UUID ending 0005). Log replay additionally requires the new diagnostic characteristic (0006). This is an experimental local Bluetooth remote. The first firmware build does not enforce authenticated pairing; do not leave it enabled in a public setting. BLE controls SD music on the disc display; it does not stream phone audio. If the webpage can't access Bluetooth, use a BLE GATT testing app instead. The webpage requires HTTPS or localhost.</footer>
 </main>
 <script>
 "use strict";
@@ -108,7 +122,6 @@ const NOWPLAYING="aba54e10-58de-4f40-b0c8-d65de1250005";
 const DIAGNOSTIC="aba54e10-58de-4f40-b0c8-d65de1250006";
 let device=null,server=null,cmd=null,status=null,cat=null,nowPlaying=null,diagnostic=null,page=0,rawStatus="",busy=false;
 const diagnosticDecoder=new TextDecoder();
-
 const $=id=>document.getElementById(id);
 const decode=value=>new TextDecoder().decode(value);
 const toast=(t)=>{$("alert").textContent=t};
@@ -219,6 +232,9 @@ async function connect(){
   await nowPlaying.startNotifications();
   nowPlaying.addEventListener("characteristicvaluechanged",onNowPlaying);
   updateConnection();toast("Connected. Album and track commands are live.");
+  // UTC time lets compatible firmware calculate elapsed e-paper cooldown
+  // from its last COMPLETED refresh across a hard power-off. Older firmware
+  // harmlessly ignores this new command, so the public site stays compatible.
   await send("TIME:"+Math.floor(Date.now()/1000));
   await refreshStatus();
   consumeNowPlaying(decode(await nowPlaying.readValue()));
@@ -257,6 +273,27 @@ for(const [id,[command,state]] of Object.entries(logActions)){
   if(await send(command))$("logState").textContent=state;
  };
 }
+const systemQuick={
+ simIdle:"SYS:IDLE",simWake:"SYS:WAKE",simLow:"SYS:BATTERY-LOW",
+ simOk:"SYS:BATTERY-OK",simPlugIn:"SYS:USB-IN",simPlugOut:"SYS:USB-OUT"
+};
+for(const [id,command] of Object.entries(systemQuick))
+ $(id).onclick=async()=>{if(await send(command))toast("Test signal sent: "+command);};
+const allowedSystemLines=new Set([
+ "!IDLE","!WAKE","!BATTERY-LOW","!BATTERY-OK",
+ "!USB-IN","!USB-OUT","!PLUG-IN","!PLUG-OUT",
+ "!JACK-IN","!JACK-OUT","!RESUME"
+]);
+async function sendDebugLine(){
+ const line=$("debugLine").value.trim().toUpperCase();
+ if(!allowedSystemLines.has(line)){
+  toast("Not in the permitted test-event list; see examples below the input.");
+  return;
+ }
+ if(await send(line))toast("Test signal sent: "+line);
+}
+$("debugSend").onclick=sendDebugLine;
+$("debugLine").addEventListener("keydown",e=>{if(e.key==="Enter")sendDebugLine();});
 $("logCopy").onclick=async()=>{
  try{await navigator.clipboard.writeText($("logText").value);toast("Diagnostic log copied.");}
  catch(err){$("logText").select();toast("Select and copy the log manually.");}
