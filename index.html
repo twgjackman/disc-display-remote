@@ -109,6 +109,20 @@ footer{margin-top:25px;font-size:.78rem;line-height:1.5;color:#acbbc2}
  style="width:100%;height:245px;resize:vertical;margin-top:8px;background:#0c1924;color:#dce8e8;border:1px solid #536676;border-radius:12px;padding:12px;font:12px/1.4 monospace" placeholder="Connect, then tap Replay boot log."></textarea>
 <small>Only this sketch's captured Serial messages are available, up to the RAM ring limit. Bootloader and library-internal logs aren't included. The log is lost when ESP32 resets.</small>
 </div>
+<div class="panel" id="board2Panel">
+<div class="spread"><h2>Board 2 · SD clock / e-ink diagnostics</h2><span class="muted" style="font-size:.8rem">Matching Board 2 firmware required</span></div>
+<p class="muted" style="font-size:.83rem">Set the microSD SPI speed for the <strong>next full power cycle</strong>. It does not change speed or restart SD during playback. Start with 4 MHz (baseline), then try 2 MHz and 1 MHz for mounting tests. Slow speeds may stutter in WAV playback. Inspect the replayed boot log after reconnecting.</p>
+<div class="grid" id="b2Quick"></div>
+<details style="margin-top:12px">
+<summary style="cursor:pointer;padding:10px 0;color:#dfb570">Advanced clock speeds and raw diagnostics</summary>
+<div class="grid" id="b2Advanced" style="margin-top:8px"></div>
+</details>
+<div class="spread" style="margin-top:14px">
+<input id="b2Line" style="flex:1;min-width:0;min-height:46px;border-radius:10px;background:#102332;color:#fff;border:1px solid #65859a;padding:8px" aria-label="Allowlisted Board 2 test command" placeholder="!spi-sd-clock 2m" autocomplete="off">
+<button id="b2Send">Send</button>
+</div>
+<small>Only the listed Board 2 commands are accepted. E-ink Hold blocks <strong>new</strong> refreshes, not an in-flight refresh. SD checks are skipped while WAV or EPD is active.</small>
+</div>
 <div class="panel" id="board1Panel">
 <div class="spread"><h2>Board 1 · SD / SPI / E-ink bench tests</h2><span class="muted" style="font-size:.8rem">Test firmware only</span></div>
 <p class="muted" style="font-size:.83rem">Runs the same allowlisted tests as USB Serial Monitor, with responses in the diagnostic log above. Keep your ESP32 and E-ink powered from the working mains supply and connect the phone over BLE. The remote cannot switch external 5V power. Use <strong>Replay boot log</strong> after cold restarting.</p>
@@ -292,6 +306,60 @@ for(const [id,[command,state]] of Object.entries(logActions)){
    }
  };
 }
+// Separate Board 2-only allowlist: never forward arbitrary shell/Serial text.
+const board2Codes=new Map([
+ ["!spi-boot info","B2:SDCLK:INFO"],
+ ["!spi-sd-clock info","B2:SDCLK:INFO"],
+ ["!spi-sd-clock 400k","B2:SDCLK:400K"],
+ ["!spi-sd-clock 1m","B2:SDCLK:1M"],
+ ["!spi-sd-clock 2m","B2:SDCLK:2M"],
+ ["!spi-sd-clock 4m","B2:SDCLK:4M"],
+ ["!spi-sd-clock 8m","B2:SDCLK:8M"],
+ ["!spi-state","B2:SPI:STATE"],
+ ["!sd-check","B2:SD:CHECK"],
+ ["!spi-epd hold","B2:EPD:HOLD"],
+ ["!spi-epd arm","B2:EPD:ARM"]
+]);
+function board2WireCommand(input){
+ return board2Codes.get(input.trim().toLowerCase().replace(/\s+/g," "))||null;
+}
+async function sendBoard2(input){
+ const line=input.trim().toLowerCase().replace(/\s+/g," ");
+ const wire=board2WireCommand(line);
+ if(!wire){toast("Unsupported Board 2 command; use the listed tests.");return;}
+ if(!connected()){toast("Connect to the Board 2 remote first.");return;}
+ if(!diagnostic){toast("BLE diagnostics unavailable. Flash matching Board 2 firmware.");return;}
+ if(!board1LogContinuous){
+   if(!await send("LOG:LIVE"))return;
+   board1LogContinuous=true;
+   $("logState").textContent="Live · Board 2 SPI diagnostics";
+ }
+ if(!await send(wire))return;
+ toast(line.startsWith("!spi-sd-clock ") && line!=="!spi-sd-clock info"?
+   "SD speed saved if NVS succeeds. Fully power off and cold-boot to apply. Check log.":
+   "Board 2 diagnostic sent: "+line+" — check log.");
+}
+function addBoard2Buttons(id,entries){
+ const root=$(id);
+ for(const [label,line] of entries){
+   const b=document.createElement("button");
+   b.textContent=label;b.title=line;b.onclick=()=>sendBoard2(line);
+   root.appendChild(b);
+ }
+}
+addBoard2Buttons("b2Quick",[
+ ["Boot clock info","!spi-boot info"],
+ ["SPI state","!spi-state"],["SD checkpoint","!sd-check"],
+ ["SD 4 MHz","!spi-sd-clock 4m"],["SD 2 MHz","!spi-sd-clock 2m"],
+ ["SD 1 MHz","!spi-sd-clock 1m"],
+ ["Hold e-ink starts","!spi-epd hold"],["Arm e-ink starts","!spi-epd arm"]
+]);
+addBoard2Buttons("b2Advanced",[
+ ["SD 400 kHz","!spi-sd-clock 400k"],["SD 8 MHz","!spi-sd-clock 8m"],
+ ["SD clock info","!spi-sd-clock info"]
+]);
+$("b2Send").onclick=()=>sendBoard2($("b2Line").value);
+$("b2Line").addEventListener("keydown",e=>{if(e.key==="Enter")sendBoard2($("b2Line").value);});
 // Explicit Board 1 bench-test allowlist. Never forward arbitrary Serial text.
 const board1Codes=new Map([
  ["!spi-boot early","B1:BOOT:EARLY"],
