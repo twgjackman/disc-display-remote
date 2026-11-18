@@ -1,0 +1,32 @@
+{
+  "id": "./",
+  "name": "Disc Display Remote",
+  "short_name": "Disc Display",
+  "description": "Mobile-first BLE controller for the Gregg Jackman framed disc collection",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#101719",
+  "theme_color": "#101719",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
