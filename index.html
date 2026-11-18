@@ -7,7 +7,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="./styles.css">
-<title>Disc Display</title>
+<title>Disc Display · v1.1</title>
 </head><body>
 <div id="app">
 <header class="topbar">
@@ -46,7 +46,7 @@
    <div class="player-hero"><div class="art-zone" id="artZone" tabindex="0" aria-label="Album artwork; drag up or down to adjust volume"><div id="playerCover" class="disc-image cover"><span>♫</span></div><div id="gestureVolume" class="gesture-volume" hidden>Volume</div></div><div class="playing-details"><div class="eyebrow">FROM THE COLLECTION</div><h1 id="songTitle">No track selected</h1><p id="songArtist">—</p><p id="albumLabel" class="muted">—</p></div>
    <div class="seeker"><input id="seekBar" type="range" min="0" max="100" value="0" aria-label="Track position" title="Track seeking requires additional BLE firmware support"><div class="timeline"><span id="elapsedLabel">0:00</span><span id="durationLabel">—</span></div></div>
    <div class="transport"><button type="button" id="previousTrack" aria-label="Previous track">⏮</button><button type="button" id="playPause" class="play-primary" aria-label="Play">▶</button><button type="button" id="nextTrack" aria-label="Next track">⏭</button></div>
-   <div class="player-utility"><button id="muteButton" class="tertiary" type="button">◁ Mute</button><input id="volumeSlider" type="range" min="0" max="127" value="32" aria-label="Volume"><span id="volumeText">—</span></div></div>
+   <div class="player-utility"><button id="muteButton" class="tertiary" type="button">◁ Mute</button><button id="volumeDown" class="volume-step" type="button" aria-label="Volume down">−</button><input id="volumeSlider" type="range" min="0" max="127" value="32" aria-label="Display speaker volume"><button id="volumeUp" class="volume-step" type="button" aria-label="Volume up">+</button><span id="volumeText">—</span></div></div>
    <div class="tracks-panel"><div class="section-heading"><h2>Tracks</h2><span id="trackCount" class="muted">—</span></div><div id="trackList" class="track-list"><p class="muted">Connect to load track information.</p></div></div>
   </div>
  </section>

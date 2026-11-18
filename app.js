@@ -1,4 +1,4 @@
-/* Disc Display Remote production v1 — no diagnostic or bench-test protocol */
+/* Disc Display Remote production v1.1 — no diagnostic or bench-test protocol */
 'use strict';
 const SERVICE='aba54e10-58de-4f40-b0c8-d65de1250001';
 const COMMAND='aba54e10-58de-4f40-b0c8-d65de1250002';
@@ -17,7 +17,21 @@ const positions=[
 const discPoints=[];let slot=1;
 for(const row of positions){const y=row[0];for(const x of row.slice(1))discPoints.push({slot:slot++,x,y});}
 const pointFor=id=>discPoints.find(d=>d.slot===Number(id));
-const coverLoaded=new Map();
+const staticAlbums=new Map();
+let tracksRenderKey='';
+async function loadAlbumMetadata(){
+ try{
+  const resp=await fetch('./assets/catalog.json');
+  if(!resp.ok)throw Error('catalogue '+resp.status);
+  const json=await resp.json();
+  for(const album of json.albums||[]){
+   if(Number.isInteger(album.slot)&&album.slot>=1&&album.slot<=61)staticAlbums.set(album.slot,album);
+  }
+  tracksRenderKey='';
+  renderMeta();renderTracks();renderLibrary();renderLive();
+ }catch(err){console.warn('Bundled track catalogue not available',err)}
+}
+
 const state={device:null,server:null,command:null,status:null,catalogueChar:null,nowPlayingChar:null,connected:false,
  slot:0,mode:1,carousel:false,playing:false,speaker:false,quiet:false,album:'',volume:32,seconds:0,duration:0,
  track:0,totalTracks:0,title:'',artist:'',printed:'',viewOverride:null,catalogue:new Map(),lastVolume:32};
@@ -27,21 +41,31 @@ function flash(message){const el=$('toast');if(!el)return;el.textContent=message
 function text(v){return String(v??'').trim()}
 function pad(n){return String(n).padStart(2,'0')}
 function formatSeconds(n){n=Math.max(0,Number(n)||0);return Math.floor(n/60)+':'+pad(Math.floor(n%60))}
-function albumEntry(n){return state.catalogue.get(Number(n))||{slot:Number(n),name:Number(n)>=58?'Special artwork '+pad(n):'Disc '+pad(n),tracks:0}}
-function albumName(n){return albumEntry(n).name.replace(/^\d{2}\s+/, '')}
+function albumEntry(n){
+ const slot=Number(n);const sd=state.catalogue.get(slot)||{};
+ const local=staticAlbums.get(slot);
+ return local?{...sd,...local,sdTracks:sd.tracks}:({...sd,slot,name:sd.name||('Disc '+pad(slot)),tracks:[]});
+}
+function albumName(n){const a=albumEntry(n);return a.name?.replace(/^\d{2}\s+/, '')||'Disc '+pad(n)}
+
 function connected(){return Boolean(state.server&&state.server.connected&&state.command)}
 function saveCatalogue(){try{localStorage.setItem('disc-display-catalog-v1',JSON.stringify([...state.catalogue.values()]));}catch(_){}}
 function loadCatalogue(){try{const data=JSON.parse(localStorage.getItem('disc-display-catalog-v1')||'[]');for(const a of data)if(a&&Number.isInteger(a.slot))state.catalogue.set(a.slot,a)}catch(_){}}
-function crop(el,n){const p=pointFor(n);el.style.backgroundImage='url("./assets/frame.webp")';if(!p){el.style.backgroundImage='none';return}
- const d=134,w=1470,h=1024;
- el.style.backgroundSize=(w/d*100).toFixed(2)+'% auto';
- el.style.backgroundPosition=(((p.x-d/2)/(w-d))*100).toFixed(3)+'% '+(((p.y-d/2)/(h-d))*100).toFixed(3)+'%';
- const coverPath='./assets/covers/'+pad(n)+'.webp';
- if(el.id==='playerCover'){
-  const known=coverLoaded.get(n);
-  if(known===true){el.style.backgroundImage='url("'+coverPath+'")';el.style.backgroundSize='cover';el.style.backgroundPosition='center';}
-  if(known===undefined){coverLoaded.set(n,false);const cover=new Image();cover.onload=()=>{coverLoaded.set(n,true);if(Number(state.slot)===Number(n)){el.style.backgroundImage='url("'+coverPath+'")';el.style.backgroundSize='cover';el.style.backgroundPosition='center';}};cover.src=coverPath;}
+function crop(el,n){
+ const idx=Number(n)-1;
+ if(!Number.isInteger(idx)||idx<0||idx>=61){
+  el.style.backgroundImage='none';return;
  }
+ // The Play screen uses the original square cover. Round disc thumbnails
+ // use the PowerPoint's printed disc artwork, except slots 58..61,
+ // which have no corresponding physical disc.
+ const square=el.id==='playerCover'||idx>=57;
+ const file=square?'covers-atlas.webp':'discs-atlas.webp';
+ const col=idx%8,row=Math.floor(idx/8);
+ el.style.backgroundImage='url("./assets/'+file+'")';
+ el.style.backgroundSize='800% 800%';
+ el.style.backgroundPosition=(col/7*100)+'% '+(row/7*100)+'%';
+ el.classList.toggle('special-cover',idx>=57&&el.id!=='playerCover');
 }
 function discElement(n,extra){const disc=document.createElement('div');disc.className='disc-image'+(extra?' '+extra:'');const inner=document.createElement('span');inner.textContent='◉';disc.append(inner);crop(disc,n);return disc;}
 function buildFrame(){
@@ -57,33 +81,50 @@ function buildPortraitGrid(){
  for(const p of discPoints){const button=document.createElement('button');button.type='button';button.dataset.slot=p.slot;const disc=discElement(p.slot);const name=document.createElement('small');name.className='disc-label';name.textContent=pad(p.slot);button.append(disc,name);button.addEventListener('click',()=>selectAlbum(p.slot));grid.append(button);}
 }
 function renderMeta(){
- const n=state.slot,entry=albumEntry(n),name=albumName(n)||'Choose an album';
+ const n=state.slot,entry=albumEntry(n),name=albumName(n)||'Choose an album',detail=staticAlbums.get(n);
+ const artist=detail?.artist||'';
+ const year=detail?.year?' · '+detail.year:'';
+ const title=detail?.title||name;
  $('frameSelected').textContent=n?pad(n)+' · '+name:'Select a disc';
- $('portraitAlbum').textContent=n?name:'Choose a disc';
- $('portraitArtist').textContent=n?'Album '+pad(n):'Tap an album in the collection';
- $('portraitMeta').textContent=n>=58?'Special e-ink artwork · no physical disc':(n?'Physical disc '+pad(n):'The frame contains 57 physical discs');
+ $('portraitAlbum').textContent=n?title:'Choose a disc';
+ $('portraitArtist').textContent=n?(artist?artist+year:'Disc '+pad(n)):'Tap an album in the collection';
+ $('portraitMeta').textContent=n>=58?'Live/special album · no physical disc':(n?'Physical disc '+pad(n):'The frame contains 57 physical discs');
  crop($('portraitDisc'),n);
  crop($('playerCover'),n);
- $('albumLabel').textContent=n?name+' · Disc '+pad(n):'—';
- $('songTitle').textContent=state.title||((state.playing&&n)?name:'No track selected');
- $('songArtist').textContent=state.artist||'—';
- $('miniTitle').textContent=state.title||name;
- $('miniArtist').textContent=state.artist||'Disc Display';
+ $('albumLabel').textContent=n?(artist?artist+' · ':'')+title+' · '+pad(n):'—';
+ $('songTitle').textContent=state.title||((state.playing&&n)?title:'No track selected');
+ $('songArtist').textContent=state.artist||artist||'—';
+ $('miniTitle').textContent=state.title||title;
+ $('miniArtist').textContent=state.artist||artist||'Disc Display';
  $('modeCaption').textContent=['','E-ink display','LED display','Audio mode'][state.mode]||'Display';
  $('currentCaption').textContent=n?pad(n)+' · '+name:'No disc selected';
  for(const b of document.querySelectorAll('.disc-hotspot')){const active=Number(b.dataset.slot)===n;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));}
  for(const b of document.querySelectorAll('#portraitGrid button')){b.querySelector('.disc-image')?.classList.toggle('selected',Number(b.dataset.slot)===n);}
 }
 function renderTracks(){
- const total=Number(state.totalTracks)||Number(albumEntry(state.slot).tracks)||0;
+ const a=albumEntry(state.slot);
+ const source=Array.isArray(a.tracks)?a.tracks:[];
+ const total=source.length||Number(state.totalTracks)||Number(a.sdTracks)||0;
+ const key=[state.slot,state.track,state.title,total,source.length].join('|');
+ if(tracksRenderKey===key)return;
+ tracksRenderKey=key;
  $('trackCount').textContent=total?total+' tracks':'Tracks unavailable';
  const target=$('trackList');target.replaceChildren();
- if(!total){const p=document.createElement('p');p.className='muted';p.textContent='Track list will appear as the album is scanned. Full track titles require a catalogue export.';target.append(p);return;}
- for(let i=1;i<=Math.min(total,120);i++){
+ if(!total){const p=document.createElement('p');p.className='muted';p.textContent='No track listing is available for this album.';target.append(p);return;}
+ let group='';
+ for(let i=1;i<=Math.min(total,250);i++){
+  const record=source[i-1];
+  if(record?.group&&record.group!==group){
+   group=record.group;
+   const heading=document.createElement('p');heading.className='track-group';heading.textContent=group;target.append(heading);
+  }
   const b=document.createElement('button');b.type='button';b.className='track-row'+(i===state.track?' active':'');
   const id=document.createElement('span');id.className='track-index';id.textContent=pad(i);
-  const title=document.createElement('span');title.textContent=i===state.track&&state.title?state.title:'Track '+pad(i);
-  b.append(id,title);b.addEventListener('click',()=>{if(i===state.track)return;flash('Direct track jump requires a firmware BLE command. Use previous/next for now.');});target.append(b);
+  const title=document.createElement('span');title.textContent=record?.title||(i===state.track&&state.title?state.title:'Track '+pad(i));
+  b.append(id,title);
+  b.title='View track in source listing; direct track selection is awaiting firmware support';
+  b.addEventListener('click',()=>{if(i!==state.track)flash('Direct track selection needs a BLE firmware update. Use Previous/Next for now.');});
+  target.append(b);
  }
 }
 function renderSettings(){
@@ -220,13 +261,13 @@ function selectAlbum(n){n=Number(n);if(!Number.isInteger(n)||n<0||n>99)return;st
 function openDialog(id){const el=$(id);if(id==='libraryDialog')renderLibrary();if(id==='liveDialog')renderLive();if(!el.open)el.showModal();}
 function closeDialog(id){const el=$(id);if(el?.open)el.close();}
 function sheetRow(n){const a=albumEntry(n);const button=document.createElement('button');button.type='button';button.className='sheet-item';const art=discElement(n);
- const details=document.createElement('span');details.className='sheet-item-text';const title=document.createElement('strong');title.textContent=albumName(n);const sub=document.createElement('small');sub.textContent=(n>=58?'Special artwork ':'Disc '+pad(n))+(a.tracks?' · '+a.tracks+' tracks':'');details.append(title,sub);
+ const details=document.createElement('span');details.className='sheet-item-text';const title=document.createElement('strong');title.textContent=a.title||albumName(n);const sub=document.createElement('small');const count=Array.isArray(a.tracks)?a.tracks.length:Number(a.tracks)||0;sub.textContent=(a.artist?a.artist+' · ':'')+(a.year||'')+(n>=58?' · Live/special':' · Disc '+pad(n))+(count?' · '+count+' tracks':'');details.append(title,sub);
  const arrow=document.createElement('span');arrow.className='chevron';arrow.textContent='›';button.append(art,details,arrow);button.addEventListener('click',()=>selectAlbum(n));return button;
 }
 function renderLibrary(){
  const q=text($('librarySearch').value).toLowerCase(),root=$('libraryList');root.replaceChildren();
  let matches=0;
- for(const p of discPoints){const a=albumEntry(p.slot);if(q&&!((pad(p.slot)+' '+a.name).toLowerCase().includes(q)))continue;root.append(sheetRow(p.slot));matches++;}
+ for(const p of discPoints){const a=albumEntry(p.slot);if(q&&!((pad(p.slot)+' '+(a.artist||'')+' '+(a.title||'')+' '+(a.name||'')+' '+(a.year||'')).toLowerCase().includes(q)))continue;root.append(sheetRow(p.slot));matches++;}
  if(!matches){const p=document.createElement('p');p.className='muted';p.textContent='No matching discs';root.append(p);}
 }
 function renderLive(){const root=$('liveList');root.replaceChildren();let slots=[58,59,60,61];const detected=[...state.catalogue.keys()].filter(n=>n>57&&n<100);if(detected.length)slots=detected;for(const n of slots)root.append(sheetRow(n));}
@@ -261,6 +302,8 @@ function wire(){
  $('settingsVolume').addEventListener('input',e=>scheduleVolume(Number(e.target.value)));
  $('volumeSlider').addEventListener('input',e=>scheduleVolume(Number(e.target.value)));
  $('muteButton').addEventListener('click',()=>{if(state.volume>0){state.lastVolume=state.volume;scheduleVolume(0)}else scheduleVolume(Math.max(1,state.lastVolume));});
+ $('volumeDown').addEventListener('click',()=>scheduleVolume(state.volume-8));
+ $('volumeUp').addEventListener('click',()=>scheduleVolume(state.volume+8));
  $('settingsDisconnect').addEventListener('click',()=>{closeDialog('settingsDialog');disconnect();});
  $('seekBar').addEventListener('input',e=>{e.target.value=String(state.seconds);flash('Seeking needs a BLE firmware update; no seek command sent.');});
  $('seekBar').addEventListener('change',e=>e.target.value=String(state.seconds));
@@ -277,7 +320,7 @@ function wire(){
  document.addEventListener('keydown',e=>{if(e.key==='Escape')for(const d of document.querySelectorAll('dialog[open]'))d.close()});
 }
 async function init(){
- loadCatalogue();buildFrame();buildPortraitGrid();wire();renderLibrary();renderLive();render();
+ loadCatalogue();buildFrame();buildPortraitGrid();wire();renderLibrary();renderLive();render();void loadAlbumMetadata();
  if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
  if(!navigator.bluetooth){$('gateMessage').textContent='Web Bluetooth is not supported in this browser. Use Chrome on Android or a compatible desktop browser over HTTPS.';}
  await reconnectGranted();

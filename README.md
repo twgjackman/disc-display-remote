@@ -1,4 +1,4 @@
-# Disc Display Remote — production v1
+# Disc Display Remote — production v1.1
 
 A mobile-first, offline-capable progressive web app controlling the physical Gregg Jackman framed disc collection over Web Bluetooth. Production source deliberately contains no BLE debug/log/serial/board-test controls.
 
@@ -19,3 +19,11 @@ This webapp does not stream sound from the phone; it controls the frame's microS
 2. Command for selecting an explicit track, and capability indicator.
 3. Seek relative/absolute command with safe SD-audio task queue.
 4. Carousel interval and LED brightness reporting; user-facing low-power command only with a recovery mechanism.
+
+## v1.1 artwork and track listings
+- 57 physical disc pictures extracted from `Discs 2x4.pptx` and packed into an 8×8 responsive WebP sprite atlas.
+- 61 square album covers and 887 track-list entries extracted from `Track Listing.docx` and packed into a 400px-per-cell 8×8 WebP cover atlas.
+- Word image relationship order for the first eleven albums differs from album order; corrected by matching artwork to PowerPoint source.
+- The last four slots (58–61) are non-disc albums and only use square artwork.
+- Original track names are shown in the player and accessible through the library. Track-number jumps and seeking require new BLE firmware commands; clicking a track cannot currently select it.
+- Android physical volume keys cannot be redirected to independent Bluetooth GATT volume through an ordinary PWA; v1.1 adds clear on-screen +/- steps alongside the slider/vertical swipe.
