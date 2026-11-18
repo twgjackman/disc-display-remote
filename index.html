@@ -75,72 +75,8 @@ footer{margin-top:25px;font-size:.78rem;line-height:1.5;color:#acbbc2}
 <div id="catalogue">Connect to browse available discs.</div>
 <div class="controls" style="margin-top:14px"><button id="pagePrev">Previous page</button><button id="pageNext">Next page</button></div>
 </div>
-<div class="panel">
-<div class="spread"><h2>Diagnostics (BLE Serial monitor)</h2><span id="logState" class="muted">Not connected</span></div>
-<p class="muted" style="font-size:.83rem">Captures firmware messages from startup in ESP32 RAM. Replay retrieves early SD/e-ink errors even without USB. Streaming is opt-in.</p>
-<div class="grid">
-<button id="logReplay">Replay boot log</button>
-<button id="logFollow">Replay + follow</button>
-<button id="logLive">Live only</button>
-<button id="logStop">Stop stream</button>
-<button id="logInfo">Buffer info</button>
-<button id="diagSd">SD info</button>
-<button id="diagEpd">E-ink info</button>
-<button id="diagAvrcp">AVRCP info</button>
-<button id="diagStatus">Status</button>
-<button id="logCopy">Copy log</button>
-</div>
-<div style="margin-top:16px;border-top:1px solid #354657;padding-top:14px">
-<h2>Test system signals (experimental)</h2>
-<p class="muted" style="font-size:.82rem">Send the same simulated system events as USB Serial Monitor: idle/wake, low battery/OK, USB plug in/out and headphone jack in/out. These are not real voltage, USB or jack sensors. Test-event firmware only.</p>
-<div class="grid">
-<button id="simIdle">Idle</button><button id="simWake">Wake</button>
-<button id="simLow">Battery low</button><button id="simOk">Battery OK</button>
-<button id="simPlugIn">Plug in USB</button><button id="simPlugOut">Unplug USB</button>
-</div>
-<div class="spread" style="margin-top:12px">
-<input id="debugLine" style="flex:1;min-width:0;min-height:46px;border-radius:10px;background:#102332;color:#fff;border:1px solid #65859a;padding:8px" aria-label="Supported Serial Monitor test command" placeholder="!idle or !jack-in" autocomplete="off">
-<button id="debugSend">Send</button>
-</div>
-<small>Allowed: !idle, !wake, !battery-low, !battery-ok, !usb-in, !usb-out, !plug-in, !plug-out, !jack-in, !jack-out, !resume. Other Serial commands are intentionally not forwarded for safety.</small>
-</div>
-<div class="spread" style="margin-top:12px"><label for="logText">Diagnostic output</label><button class="subtle" id="logClear" style="min-height:36px;padding:6px 12px">Clear view</button></div>
-<textarea id="logText" readonly spellcheck="false" aria-label="Diagnostic Serial output"
- style="width:100%;height:245px;resize:vertical;margin-top:8px;background:#0c1924;color:#dce8e8;border:1px solid #536676;border-radius:12px;padding:12px;font:12px/1.4 monospace" placeholder="Connect, then tap Replay boot log."></textarea>
-<small>Only this sketch's captured Serial messages are available, up to the RAM ring limit. Bootloader and library-internal logs aren't included. The log is lost when ESP32 resets.</small>
-</div>
-<div class="panel" id="board2Panel">
-<div class="spread"><h2>Board 2 · SD clock / e-ink diagnostics</h2><span class="muted" style="font-size:.8rem">Matching Board 2 firmware required</span></div>
-<p class="muted" style="font-size:.83rem">Set the microSD SPI speed for the <strong>next full power cycle</strong>. It does not change speed or restart SD during playback. Start with 4 MHz (baseline), then try 2 MHz and 1 MHz for mounting tests. Slow speeds may stutter in WAV playback. Inspect the replayed boot log after reconnecting.</p>
-<div class="grid" id="b2Quick"></div>
-<details style="margin-top:12px">
-<summary style="cursor:pointer;padding:10px 0;color:#dfb570">Advanced clock speeds and raw diagnostics</summary>
-<div class="grid" id="b2Advanced" style="margin-top:8px"></div>
-</details>
-<div class="spread" style="margin-top:14px">
-<input id="b2Line" style="flex:1;min-width:0;min-height:46px;border-radius:10px;background:#102332;color:#fff;border:1px solid #65859a;padding:8px" aria-label="Allowlisted Board 2 test command" placeholder="!spi-sd-clock 2m" autocomplete="off">
-<button id="b2Send">Send</button>
-</div>
-<small>Only the listed Board 2 commands are accepted. E-ink Hold blocks <strong>new</strong> refreshes, not an in-flight refresh. SD checks are skipped while WAV or EPD is active.</small>
-</div>
-<div class="panel" id="board1Panel">
-<div class="spread"><h2>Board 1 · SD / SPI / E-ink bench tests</h2><span class="muted" style="font-size:.8rem">Test firmware only</span></div>
-<p class="muted" style="font-size:.83rem">Runs the same allowlisted tests as USB Serial Monitor, with responses in the diagnostic log above. Keep your ESP32 and E-ink powered from the working mains supply and connect the phone over BLE. The remote cannot switch external 5V power. Use <strong>Replay boot log</strong> after cold restarting.</p>
-<h2>Live tests</h2>
-<div id="b1Quick" class="grid"></div>
-<details style="margin-top:16px">
-<summary style="cursor:pointer;padding:10px 0;color:#dfb570">Boot configuration, manual power markers and recovery</summary>
-<p class="muted" style="font-size:.8rem">Early/late RESET timing and SD clock changes apply after a <strong>full power cycle</strong>. 5V ON/OFF markers only annotate the log: switch the E-ink supply manually. RESET LOW/HIGH is refused while the panel is busy.</p>
-<div id="b1Advanced" class="grid"></div>
-</details>
-<div class="spread" style="margin-top:16px">
-<input id="b1Line" style="flex:1;min-width:0;min-height:46px;border-radius:10px;background:#102332;color:#fff;border:1px solid #65859a;padding:8px" aria-label="Board 1 test command" placeholder="!spi-boot early" autocomplete="off">
-<button id="b1Send">Send test</button>
-</div>
-<small>Accepts only the 24 supported Board 1 commands and <code>!album 35</code> (normal album selection). <code>!spi-refresh</code> observes the 180-second E-ink cooldown. Continuous stress runs until stopped. <code>!epd-test</code> is not implemented in this firmware branch.</small>
-</div>
 <p id="alert" aria-live="polite"></p>
-<footer>Android: open in Chrome. iPhone: open the same HTTPS page in Bluefy, not Safari. The firmware and this page must both support the Now Playing characteristic (UUID ending 0005). Log replay additionally requires the new diagnostic characteristic (0006). This is an experimental local Bluetooth remote. The first firmware build does not enforce authenticated pairing; do not leave it enabled in a public setting. BLE controls SD music on the disc display; it does not stream phone audio. If the webpage can't access Bluetooth, use a BLE GATT testing app instead. The webpage requires HTTPS or localhost.</footer>
+<footer>Use Chrome on Android or a compatible desktop browser over HTTPS. This remote controls audio stored on the disc display; it does not stream audio from your phone. Bluetooth access must be authorised through your browser. Production firmware security and trusted-device restrictions are configured separately.</footer>
 </main>
 <script>
 "use strict";
@@ -149,9 +85,7 @@ const COMMAND="aba54e10-58de-4f40-b0c8-d65de1250002";
 const STATUS="aba54e10-58de-4f40-b0c8-d65de1250003";
 const CATALOGUE="aba54e10-58de-4f40-b0c8-d65de1250004";
 const NOWPLAYING="aba54e10-58de-4f40-b0c8-d65de1250005";
-const DIAGNOSTIC="aba54e10-58de-4f40-b0c8-d65de1250006";
-let device=null,server=null,cmd=null,status=null,cat=null,nowPlaying=null,diagnostic=null,page=0,rawStatus="",busy=false;
-const diagnosticDecoder=new TextDecoder();
+let device=null,server=null,cmd=null,status=null,cat=null,nowPlaying=null,page=0,rawStatus="",busy=false;
 const $=id=>document.getElementById(id);
 const decode=value=>new TextDecoder().decode(value);
 const toast=(t)=>{$("alert").textContent=t};
@@ -190,14 +124,6 @@ function consumeNowPlaying(value){
   const seconds=Number(data.d||0);
   $("duration").textContent=seconds?Math.floor(seconds/60)+":"+String(seconds%60).padStart(2,"0"):"—";
  }catch(err){console.warn("Unparseable Now Playing notification",err);}
-}
-function onDiagnostic(e) {
- const chunk=diagnosticDecoder.decode(e.target.value,{stream:true});
- const display=$("logText");
- display.value+=chunk;
- if(display.value.length>90000)
-   display.value="[Phone view trimmed to last 90 KB]\n"+display.value.slice(-80000);
- display.scrollTop=display.scrollHeight;
 }
 function onNowPlaying(e){consumeNowPlaying(decode(e.target.value))}
 function onStatus(e){consumeStatus(decode(e.target.value))}
@@ -241,22 +167,13 @@ async function connect(){
  if(!navigator.bluetooth){toast("Web Bluetooth is unavailable. Use Android Chrome over HTTPS or a BLE scanner app.");return;}
  try{
   device=await navigator.bluetooth.requestDevice({filters:[{namePrefix:"Disc Display Remote"}],optionalServices:[SERVICE]});
-  device.addEventListener("gattserverdisconnected",()=>{board1LogContinuous=false;updateConnection();toast("Device disconnected.")});
+  device.addEventListener("gattserverdisconnected",()=>{updateConnection();toast("Device disconnected.")});
   server=await device.gatt.connect();
   const service=await server.getPrimaryService(SERVICE);
   cmd=await service.getCharacteristic(COMMAND);
   status=await service.getCharacteristic(STATUS);
   cat=await service.getCharacteristic(CATALOGUE);
   nowPlaying=await service.getCharacteristic(NOWPLAYING);
-  diagnostic=null;
-  try {
-   diagnostic=await service.getCharacteristic(DIAGNOSTIC);
-   await diagnostic.startNotifications();
-   diagnostic.addEventListener("characteristicvaluechanged",onDiagnostic);
-   $("logState").textContent="Ready · replay available";
-  } catch(err) {
-   $("logState").textContent="Firmware does not support diagnostics";
-  }
   await status.startNotifications();
   status.addEventListener("characteristicvaluechanged",onStatus);
   await nowPlaying.startNotifications();
@@ -286,173 +203,6 @@ $("volume").oninput=e=>{
 };
 $("pagePrev").onclick=()=>fetchPage(page-1);
 $("pageNext").onclick=()=>fetchPage(page+1);
-const logActions={
- logReplay:["LOG:REPLAY","Replaying boot log"],
- logFollow:["LOG:FOLLOW","Replaying and following live log"],
- logLive:["LOG:LIVE","Streaming new log lines"],
- logStop:["LOG:STOP","Log stream stopped"],
- logInfo:["LOG:INFO","Reporting diagnostic buffer usage"],
- diagSd:["DIAG:SD","SD diagnostic requested"],
- diagEpd:["DIAG:EPD","E-ink diagnostic requested"],
- diagAvrcp:["DIAG:AVRCP","AVRCP diagnostic requested"],
- diagStatus:["DIAG:STATUS","Status requested"]
-};
-for(const [id,[command,state]] of Object.entries(logActions)){
- $(id).onclick=async()=>{
-  if(!diagnostic){toast("Update ESP32 firmware to enable BLE diagnostics.");return;}
-  if(await send(command)){
-     $("logState").textContent=state;
-     board1LogContinuous=(command==="LOG:LIVE"||command==="LOG:FOLLOW");
-   }
- };
-}
-// Separate Board 2-only allowlist: never forward arbitrary shell/Serial text.
-const board2Codes=new Map([
- ["!spi-boot info","B2:SDCLK:INFO"],
- ["!spi-sd-clock info","B2:SDCLK:INFO"],
- ["!spi-sd-clock 400k","B2:SDCLK:400K"],
- ["!spi-sd-clock 1m","B2:SDCLK:1M"],
- ["!spi-sd-clock 2m","B2:SDCLK:2M"],
- ["!spi-sd-clock 4m","B2:SDCLK:4M"],
- ["!spi-sd-clock 8m","B2:SDCLK:8M"],
- ["!spi-state","B2:SPI:STATE"],
- ["!sd-check","B2:SD:CHECK"],
- ["!spi-epd hold","B2:EPD:HOLD"],
- ["!spi-epd arm","B2:EPD:ARM"]
-]);
-function board2WireCommand(input){
- return board2Codes.get(input.trim().toLowerCase().replace(/\s+/g," "))||null;
-}
-async function sendBoard2(input){
- const line=input.trim().toLowerCase().replace(/\s+/g," ");
- const wire=board2WireCommand(line);
- if(!wire){toast("Unsupported Board 2 command; use the listed tests.");return;}
- if(!connected()){toast("Connect to the Board 2 remote first.");return;}
- if(!diagnostic){toast("BLE diagnostics unavailable. Flash matching Board 2 firmware.");return;}
- if(!board1LogContinuous){
-   if(!await send("LOG:LIVE"))return;
-   board1LogContinuous=true;
-   $("logState").textContent="Live · Board 2 SPI diagnostics";
- }
- if(!await send(wire))return;
- toast(line.startsWith("!spi-sd-clock ") && line!=="!spi-sd-clock info"?
-   "SD speed saved if NVS succeeds. Fully power off and cold-boot to apply. Check log.":
-   "Board 2 diagnostic sent: "+line+" — check log.");
-}
-function addBoard2Buttons(id,entries){
- const root=$(id);
- for(const [label,line] of entries){
-   const b=document.createElement("button");
-   b.textContent=label;b.title=line;b.onclick=()=>sendBoard2(line);
-   root.appendChild(b);
- }
-}
-addBoard2Buttons("b2Quick",[
- ["Boot clock info","!spi-boot info"],
- ["SPI state","!spi-state"],["SD checkpoint","!sd-check"],
- ["SD 4 MHz","!spi-sd-clock 4m"],["SD 2 MHz","!spi-sd-clock 2m"],
- ["SD 1 MHz","!spi-sd-clock 1m"],
- ["Hold e-ink starts","!spi-epd hold"],["Arm e-ink starts","!spi-epd arm"]
-]);
-addBoard2Buttons("b2Advanced",[
- ["SD 400 kHz","!spi-sd-clock 400k"],["SD 8 MHz","!spi-sd-clock 8m"],
- ["SD clock info","!spi-sd-clock info"]
-]);
-$("b2Send").onclick=()=>sendBoard2($("b2Line").value);
-$("b2Line").addEventListener("keydown",e=>{if(e.key==="Enter")sendBoard2($("b2Line").value);});
-// Explicit Board 1 bench-test allowlist. Never forward arbitrary Serial text.
-const board1Codes=new Map([
- ["!spi-boot early","B1:BOOT:EARLY"],
- ["!spi-boot late","B1:BOOT:LATE"],
- ["!spi-boot info","B1:BOOT:INFO"],
- ["!spi-sd-clock 1m","B1:SDCLK:1M"],
- ["!spi-sd-clock 4m","B1:SDCLK:4M"],
- ["!spi-epd arm","B1:EPD:ARM"],
- ["!spi-epd hold","B1:EPD:HOLD"],
- ["!spi-refresh","B1:REFRESH"],
- ["!spi-stress start","B1:STRESS:START"],
- ["!spi-stress continuous","B1:STRESS:CONTINUOUS"],
- ["!spi-stress stop","B1:STRESS:STOP"],
- ["!spi-stress info","B1:STRESS:INFO"],
- ["!spi-state","B1:STATE"],
- ["!spi-tone on","B1:TONE:ON"],
- ["!spi-tone off","B1:TONE:OFF"],
- ["!spi-mark on","B1:MARK:ON"],
- ["!spi-mark off","B1:MARK:OFF"],
- ["!spi-reset low","B1:RESET:LOW"],
- ["!spi-reset high","B1:RESET:HIGH"],
- ["!sd-check","B1:SD:CHECK"],
- ["!sd-info","B1:SD:INFO"],
- ["!epd-info","B1:EPD:INFO"],
- ["!epd-retry","B1:EPD:RETRY"],
- ["!spi-audio-recover","B1:AUDIO:RECOVER"],
-]);
-let board1LogContinuous=false;
-function board1WireCommand(input){
- const line=input.trim().toLowerCase().replace(/\s+/g," ");
- if(/^!album [0-9]{1,2}$/.test(line))return "ALBUM:"+Number(line.slice(7));
- return board1Codes.get(line)||null;
-}
-async function sendBoard1(input){
- const line=input.trim().toLowerCase().replace(/\s+/g," ");
- const command=board1WireCommand(line);
- if(!command){toast("Unsupported Board 1 command; use the exact test list.");return;}
- if(!connected()){toast("Connect to Disc Display first.");return;}
- if(!diagnostic){toast("BLE diagnostics unavailable. Flash matching Board 1 firmware.");return;}
- if(!board1LogContinuous){
-   if(!await send("LOG:LIVE"))return;
-   board1LogContinuous=true;
-   $("logState").textContent="Live · Board 1 test output";
- }
- if(!await send(command))return;
- if(line==="!spi-stress continuous")
-   toast("Continuous stress requested. Use Stop stress when finished.");
- else if(line.startsWith("!spi-boot ") || line.startsWith("!spi-sd-clock "))
-   toast("Setting command sent. Full power cycle needed for changed settings.");
- else if(line.startsWith("!spi-mark "))
-   toast("5V log marker sent only. Switch E-ink power manually.");
- else if(line==="!spi-refresh")
-   toast("Refresh requested; normal 180s cooldown applies. Check log.");
- else toast("Board 1 command sent: "+line+" — check diagnostic log.");
-}
-function addBoard1Buttons(id,entries){
- const root=$(id);
- for(const [label,line] of entries){
-   const b=document.createElement("button");
-   b.textContent=label;b.title=line;b.onclick=()=>sendBoard1(line);
-   root.appendChild(b);
- }
-}
-addBoard1Buttons("b1Quick",[["SPI state","!spi-state"],["SD checkpoint","!sd-check"],["E-ink info","!epd-info"],["Refresh E-ink","!spi-refresh"],["Stress (3 passes)","!spi-stress start"],["Continuous stress","!spi-stress continuous"],["Stop stress","!spi-stress stop"],["Stress info","!spi-stress info"],["Tone on (RAM)","!spi-tone on"],["Tone off / WAV","!spi-tone off"],["Arm E-ink","!spi-epd arm"],["Hold E-ink","!spi-epd hold"]]);
-addBoard1Buttons("b1Advanced",[["Early RESET at boot","!spi-boot early"],["Late RESET at boot","!spi-boot late"],["Boot settings","!spi-boot info"],["SD clock 1 MHz","!spi-sd-clock 1m"],["SD clock 4 MHz","!spi-sd-clock 4m"],["SD root info","!sd-info"],["Mark EPD 5V ON","!spi-mark on"],["Mark EPD 5V OFF","!spi-mark off"],["RESET LOW","!spi-reset low"],["RESET HIGH","!spi-reset high"],["E-ink retry","!epd-retry"],["Audio recovery","!spi-audio-recover"]]);
-$("b1Send").onclick=()=>sendBoard1($("b1Line").value);
-$("b1Line").addEventListener("keydown",e=>{if(e.key==="Enter")sendBoard1($("b1Line").value);});
-const systemQuick={
- simIdle:"SYS:IDLE",simWake:"SYS:WAKE",simLow:"SYS:BATTERY-LOW",
- simOk:"SYS:BATTERY-OK",simPlugIn:"SYS:USB-IN",simPlugOut:"SYS:USB-OUT"
-};
-for(const [id,command] of Object.entries(systemQuick))
- $(id).onclick=async()=>{if(await send(command))toast("Test signal sent: "+command);};
-const allowedSystemLines=new Set([
- "!IDLE","!WAKE","!BATTERY-LOW","!BATTERY-OK",
- "!USB-IN","!USB-OUT","!PLUG-IN","!PLUG-OUT",
- "!JACK-IN","!JACK-OUT","!RESUME"
-]);
-async function sendDebugLine(){
- const line=$("debugLine").value.trim().toUpperCase();
- if(!allowedSystemLines.has(line)){
-  toast("Not in the permitted test-event list; see examples below the input.");
-  return;
- }
- if(await send(line))toast("Test signal sent: "+line);
-}
-$("debugSend").onclick=sendDebugLine;
-$("debugLine").addEventListener("keydown",e=>{if(e.key==="Enter")sendDebugLine();});
-$("logCopy").onclick=async()=>{
- try{await navigator.clipboard.writeText($("logText").value);toast("Diagnostic log copied.");}
- catch(err){$("logText").select();toast("Select and copy the log manually.");}
-};
-$("logClear").onclick=()=>{$("logText").value="";};
 updateConnection();
 </script>
 </body></html>
