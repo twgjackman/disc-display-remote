@@ -1,4 +1,4 @@
-/* Disc Display Remote production v1.1 — no diagnostic or bench-test protocol */
+/* Disc Display Remote production v1.2 — no diagnostic or bench-test protocol */
 'use strict';
 const SERVICE='aba54e10-58de-4f40-b0c8-d65de1250001';
 const COMMAND='aba54e10-58de-4f40-b0c8-d65de1250002';
@@ -7,16 +7,17 @@ const CATALOGUE='aba54e10-58de-4f40-b0c8-d65de1250004';
 const NOWPLAYING='aba54e10-58de-4f40-b0c8-d65de1250005';
 const $=id=>document.getElementById(id);
 const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
-const positions=[
- [153,152,264,371,477,587,696,808,917,1027,1162,1318],
- [331,152,263,371,482,587,695,800,901,1010,1114,1217,1319],
- [514,152,258,374,477,589,698,803,907,1015,1120,1218,1322],
- [696,150,258,374,482,589,698,800,907,1019,1156,1320],
- [872,151,262,372,479,587,694,808,912,1027,1133,1217]
+const FRAME_ROWS=[
+ [...Array(11)].map((_,i)=>i+1),[...Array(12)].map((_,i)=>i+12),
+ [...Array(12)].map((_,i)=>i+24),[...Array(11)].map((_,i)=>i+36),
+ [...Array(11)].map((_,i)=>i+47).concat(58)
 ];
-const discPoints=[];let slot=1;
-for(const row of positions){const y=row[0];for(const x of row.slice(1))discPoints.push({slot:slot++,x,y});}
-const pointFor=id=>discPoints.find(d=>d.slot===Number(id));
+const discPoints=[...Array(57)].map((_,i)=>({slot:i+1}));
+const CREDIT_ROWS=['spppgggssps','gpppppsgpgsp','gspgpggggpgg','ggsggggpppg','gpsssgspsgg'];
+const CREDIT=Object.fromEntries(CREDIT_ROWS.flatMap((s,r)=>[...s].map((v,i)=>[FRAME_ROWS[r][i],v])));
+const BLANKS={3:3,10:4,13:1,20:1,23:2,26:1,28:1,44:1,45:4,48:1};
+const pendingSelection={slot:null,until:0};
+const blankCount=n=>BLANKS[n]||0;
 const staticAlbums=new Map();
 let tracksRenderKey='';
 async function loadAlbumMetadata(){
@@ -27,8 +28,7 @@ async function loadAlbumMetadata(){
   for(const album of json.albums||[]){
    if(Number.isInteger(album.slot)&&album.slot>=1&&album.slot<=61)staticAlbums.set(album.slot,album);
   }
-  tracksRenderKey='';
-  renderMeta();renderTracks();renderLibrary();renderLive();
+  tracksRenderKey='';buildFrame();buildPortraitGrid();renderMeta();renderTracks();renderLibrary();renderLive();
  }catch(err){console.warn('Bundled track catalogue not available',err)}
 }
 
@@ -59,8 +59,8 @@ function crop(el,n){
  // The Play screen uses the original square cover. Round disc thumbnails
  // use the PowerPoint's printed disc artwork, except slots 58..61,
  // which have no corresponding physical disc.
- const square=el.id==='playerCover'||idx>=57;
- const file=square?'covers-atlas.webp':'discs-atlas.webp';
+ const square=el.id==='playerCover'||el.id==='fullscreenCover'||idx>=57;
+ const file=square?'covers-atlas.webp':'discs-v12.webp';
  const col=idx%8,row=Math.floor(idx/8);
  el.style.backgroundImage='url("./assets/'+file+'")';
  el.style.backgroundSize='800% 800%';
@@ -68,17 +68,74 @@ function crop(el,n){
  el.classList.toggle('special-cover',idx>=57&&el.id!=='playerCover');
 }
 function discElement(n,extra){const disc=document.createElement('div');disc.className='disc-image'+(extra?' '+extra:'');const inner=document.createElement('span');inner.textContent='◉';disc.append(inner);crop(disc,n);return disc;}
+function discButton(n,variant){
+ const b=document.createElement('button');b.type='button';
+ b.className=variant+'-disc-button'+(n===58?' live-disc-button':'');
+ b.dataset.slot=String(n);
+ if(n===58){
+  b.setAttribute('aria-label','Live albums and special artwork');b.title='Live albums';
+  const art=document.createElement('div');art.className='grammy-art';b.append(art);
+  b.addEventListener('click',()=>openDialog('liveDialog'));return b;
+ }
+ b.setAttribute('aria-label','Select '+albumName(n));b.title='Disc '+pad(n)+' · '+albumName(n);
+ for(let i=0;i<blankCount(n);i++){
+  const blank=document.createElement('span');blank.className='platinum-blank';b.append(blank);
+ }
+ b.append(discElement(n,'disc-main'));
+ b.addEventListener('click',()=>selectAlbum(n));return b;
+}
 function buildFrame(){
- const root=$('hotspots');root.replaceChildren();
- for(const p of discPoints){const b=document.createElement('button');b.type='button';b.className='disc-hotspot';b.style.left=(100*p.x/1470).toFixed(3)+'%';b.style.top=(100*p.y/1024).toFixed(3)+'%';b.dataset.slot=p.slot;b.title='Select disc '+pad(p.slot);b.setAttribute('aria-label','Select disc '+pad(p.slot));b.addEventListener('click',()=>selectAlbum(p.slot));root.append(b);}
- const e=document.createElement('button');e.type='button';e.className='eink-hotspot';e.style.left=(100*1316/1470).toFixed(3)+'%';e.style.top=(100*870/1024).toFixed(3)+'%';e.setAttribute('aria-label','Choose a live album / non-disc artwork');e.title='Live albums and special artwork';e.addEventListener('click',()=>openDialog('liveDialog'));root.append(e);
- const fallback=$('frameFallback');
- for(const row of positions){const r=document.createElement('div');r.className='fallback-row';for(let j=1;j<row.length;j++){const d=document.createElement('div');d.className='fallback-disc '+((j%3===0)?'gold':(j%3===1)?'black':'');d.textContent='◉';r.append(d);}fallback.append(r);}
- $('frameImage').addEventListener('error',()=>{$('frameImage').hidden=true;fallback.hidden=false;artAvailable=false;flash('Using simplified frame view until artwork is available.')},{once:true});
+ const root=$('frameRows');root.replaceChildren();
+ FRAME_ROWS.forEach((slots,i)=>{
+  const row=document.createElement('div');row.className='frame-row';row.dataset.row=String(i);
+  slots.forEach(n=>row.append(discButton(n,'frame')));root.append(row);
+ });
+ requestAnimationFrame(layoutLandscapeFrame);
+}
+function layoutLandscapeFrame(){
+ const root=$('frameRows');if(!root?.clientWidth||!root.clientHeight)return;
+ const W=root.clientWidth,H=root.clientHeight,D=Math.max(12,Math.floor(Math.min((W-6)/13.25,H/5*.90)));
+ root.style.setProperty('--frame-disc-size',D+'px');
+ for(const row of root.children){
+  row.style.height=H/5+'px';
+  for(const b of row.children){
+   const n=Number(b.dataset.slot),extra=n===58?0:blankCount(n)*D*.13;
+   b.style.width=D+extra+'px';b.style.height=D+'px';b.style.setProperty('--disc-size',D+'px');
+   const art=b.querySelector('.disc-main,.grammy-art');if(art)art.style.left=extra+'px';
+   b.querySelectorAll('.platinum-blank').forEach((x,i)=>{x.style.left=i*D*.13+'px';x.style.top='0px'});
+  }
+ }
 }
 function buildPortraitGrid(){
  const grid=$('portraitGrid');grid.replaceChildren();
- for(const p of discPoints){const button=document.createElement('button');button.type='button';button.dataset.slot=p.slot;const disc=discElement(p.slot);const name=document.createElement('small');name.className='disc-label';name.textContent=pad(p.slot);button.append(disc,name);button.addEventListener('click',()=>selectAlbum(p.slot));grid.append(button);}
+ FRAME_ROWS.forEach((slots,i)=>{
+  const col=document.createElement('div');col.className='portrait-column';col.dataset.row=String(i);
+  slots.forEach(n=>col.append(discButton(n,'portrait')));grid.append(col);
+ });
+ requestAnimationFrame(layoutPortraitGrid);
+}
+function layoutPortraitGrid(){
+ const grid=$('portraitGrid');if(!grid?.clientWidth)return;
+ const D=Math.max(30,Math.floor((grid.clientWidth-12)/5));
+ const minima=FRAME_ROWS.map(slots=>{
+  let h=D;for(let i=0;i<slots.length-1;i++)h+=D*(1.065+.16*blankCount(slots[i]));
+  return h;
+ });
+ const H=Math.ceil(Math.max(...minima))+6;
+ grid.style.height=H+'px';grid.style.setProperty('--portrait-disc-size',D+'px');
+ FRAME_ROWS.forEach((slots,ri)=>{
+  const buttons=[...grid.children[ri].children];
+  const extra=(H-minima[ri])/Math.max(1,slots.length-1);
+  let top=0;
+  buttons.forEach((b,i)=>{
+   const n=slots[i],layers=blankCount(n);
+   b.style.width=D+'px';b.style.height=D*(1+layers*.16)+'px';b.style.top=top+'px';
+   b.style.setProperty('--disc-size',D+'px');
+   const art=b.querySelector('.disc-main,.grammy-art');if(art)art.style.left='0px';
+   b.querySelectorAll('.platinum-blank').forEach((el,j)=>{el.style.left='0px';el.style.top=(j+1)*.16*D+'px'});
+   if(i<buttons.length-1)top+=D*(1.065+layers*.16)+extra;
+  });
+ });
 }
 function renderMeta(){
  const n=state.slot,entry=albumEntry(n),name=albumName(n)||'Choose an album',detail=staticAlbums.get(n);
@@ -90,16 +147,16 @@ function renderMeta(){
  $('portraitArtist').textContent=n?(artist?artist+year:'Disc '+pad(n)):'Tap an album in the collection';
  $('portraitMeta').textContent=n>=58?'Live/special album · no physical disc':(n?'Physical disc '+pad(n):'The frame contains 57 physical discs');
  crop($('portraitDisc'),n);
- crop($('playerCover'),n);
+ crop($('playerCover'),n);crop($('fullscreenCover'),n);$('artDialogTitle').textContent=(detail?.artist?detail.artist+' · ':'')+(detail?.title||name);
  $('albumLabel').textContent=n?(artist?artist+' · ':'')+title+' · '+pad(n):'—';
  $('songTitle').textContent=state.title||((state.playing&&n)?title:'No track selected');
  $('songArtist').textContent=state.artist||artist||'—';
- $('miniTitle').textContent=state.title||title;
- $('miniArtist').textContent=state.artist||artist||'Disc Display';
  $('modeCaption').textContent=['','E-ink display','LED display','Audio mode'][state.mode]||'Display';
  $('currentCaption').textContent=n?pad(n)+' · '+name:'No disc selected';
- for(const b of document.querySelectorAll('.disc-hotspot')){const active=Number(b.dataset.slot)===n;b.classList.toggle('active',active);b.setAttribute('aria-pressed',String(active));}
- for(const b of document.querySelectorAll('#portraitGrid button')){b.querySelector('.disc-image')?.classList.toggle('selected',Number(b.dataset.slot)===n);}
+ for(const b of document.querySelectorAll('.frame-disc-button,.portrait-disc-button')){
+ const active=Number(b.dataset.slot)===n;b.classList.toggle('selected',active);
+ b.setAttribute('aria-pressed',String(active));
+}
 }
 function renderTracks(){
  const a=albumEntry(state.slot);
@@ -128,37 +185,44 @@ function renderTracks(){
  }
 }
 function renderSettings(){
- for(const b of document.querySelectorAll('[data-mode]')){const selected=Number(b.dataset.mode)===state.mode;b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));}
- $('settingsCarousel').classList.toggle('on',state.carousel);$('settingsCarousel').setAttribute('aria-checked',String(state.carousel));
- $('playerLoop').classList.toggle('on',state.carousel);$('playerLoop').setAttribute('aria-pressed',String(state.carousel));
- $('quietState').textContent=state.quiet?'Quiet':'Normal';
- $('deviceName').textContent=state.device?.name||'Not connected';
+ for(const b of document.querySelectorAll('[data-mode]')){
+  const selected=Number(b.dataset.mode)===state.mode;
+  b.classList.toggle('selected',selected);b.setAttribute('aria-pressed',String(selected));
+ }
+ for(const id of ['settingsCarousel','playerLoop']){
+  const b=$(id);b.classList.toggle('on',state.carousel);b.setAttribute('aria-pressed',String(state.carousel));
+  b.setAttribute('aria-label',state.carousel?'Carousel on · continuous albums':'Play once · carousel off');
+  b.title=state.carousel?'Carousel on':'Play once';
+ }
+ $('quietState').textContent=state.quiet?'Quiet':'Normal';$('deviceName').textContent=state.device?.name||'Not connected';
  if(document.activeElement!==$('settingsVolume'))$('settingsVolume').value=state.volume;
  if(document.activeElement!==$('volumeSlider'))$('volumeSlider').value=state.volume;
  $('settingsVolumeValue').textContent=Math.round(state.volume/127*100)+'%';
  $('volumeText').textContent=Math.round(state.volume/127*100)+'%';
-}
-function renderPlayer(){
- $('playPause').textContent=state.playing?'Ⅱ':'▶';$('playPause').setAttribute('aria-label',state.playing?'Pause':'Play');
- $('miniPlay').textContent=state.playing?'Ⅱ':'▶';
+}function renderPlayer(){
+ const playing=!!state.playing,mute=state.volume===0;
+ $('playPause').classList.toggle('is-playing',playing);$('playPause').setAttribute('aria-label',playing?'Pause':'Play');
+ $('muteButton').classList.toggle('is-muted',mute);$('muteButton').setAttribute('aria-label',mute?'Unmute':'Mute');
+ $('stereoMeters').classList.toggle('is-playing',playing);
  $('elapsedLabel').textContent=formatSeconds(state.seconds);
  $('durationLabel').textContent=state.duration?formatSeconds(state.duration):'—';
- const slider=$('seekBar');slider.max=String(Math.max(1,state.duration||100));slider.value=String(Math.min(state.seconds,state.duration||100));slider.setAttribute('aria-valuetext','Current position '+formatSeconds(state.seconds)+'. Seeking not yet available.');
-}
-function isPortrait(){return matchMedia('(orientation:portrait)').matches}
+ const slider=$('seekBar');slider.max=String(Math.max(1,state.duration||100));
+ slider.value=String(Math.min(state.seconds,state.duration||100));
+ slider.setAttribute('aria-valuetext','Current position '+formatSeconds(state.seconds)+'. Seeking not yet available.');
+}function isPortrait(){return matchMedia('(orientation:portrait)').matches}
 function renderView(){
- const p=isPortrait(),audio=state.mode===3,showPlayer=audio&&(state.viewOverride==='player'||(state.viewOverride!=='frame'&&(p||state.playing)));
+ const p=isPortrait(),audio=state.mode===3;
+ const showPlayer=audio&&(state.viewOverride==='player'||(state.viewOverride!=='frame'&&(p||state.playing)));
  $('framePage').hidden=showPlayer||p;
- $('portraitPage').hidden=showPlayer||!p;
+ $('portraitPage').hidden=!p; // background remains mounted behind player layer
  $('playerPage').hidden=!showPlayer;
- $('miniPlayer').hidden=!(audio&&!showPlayer&&state.playing);
- $('toPlayer').hidden=!audio;
- $('portraitPlayerButton').hidden=!audio;
- $('framePage').classList.toggle('audio-visible',audio);
+ $('toPlayer').hidden=!audio;$('portraitPlayerButton').hidden=!p;
  document.body.classList.toggle('landscape',!p);document.body.classList.toggle('connected',state.connected);
- $('playerBack').textContent=p?'← Display':'← Frame';
-}
-function renderConnection(){
+ document.body.classList.toggle('player-open',showPlayer&&p);
+ $('playerBack').hidden=p;
+ if(!p&&!showPlayer)requestAnimationFrame(layoutLandscapeFrame);
+ if(p)requestAnimationFrame(layoutPortraitGrid);
+}function renderConnection(){
  const ok=connected();state.connected=ok;
  $('connectGate').hidden=ok;$('mainContent').hidden=!ok;
  $('linkButton').classList.toggle('online',ok);$('linkLabel').textContent=ok?'Connected':'Offline';
@@ -171,12 +235,20 @@ function queueWrite(message){
  return sendChain.catch(err=>{flash('Bluetooth command failed: '+err.message);return false;});
 }
 async function command(message){if(!connected()){flash('Connect to your frame first');return false}return queueWrite(message)}
-function scheduleVolume(n){n=Math.max(0,Math.min(127,Math.round(n)));state.volume=n;renderSettings();clearTimeout(volumeTimer);volumeTimer=setTimeout(()=>command('VOL:'+n),160);}
+function scheduleVolume(n){n=Math.max(0,Math.min(127,Math.round(n)));state.volume=n;renderSettings();renderPlayer();clearTimeout(volumeTimer);volumeTimer=setTimeout(()=>command('VOL:'+n),160);}
 function applyStatus(raw){
  const obj={};for(const part of text(raw).split(';')){const idx=part.indexOf('=');if(idx>0)obj[part.slice(0,idx)]=part.slice(idx+1);}
  if(!Object.keys(obj).length)return;
  const oldMode=state.mode;
- if(obj.slot!==undefined&&Number.isFinite(Number(obj.slot)))state.slot=Number(obj.slot);
+ if(obj.slot!==undefined&&Number.isFinite(Number(obj.slot))){
+  const received=Number(obj.slot);
+  if(pendingSelection.slot!==null&&received!==pendingSelection.slot&&Date.now()<pendingSelection.until){
+   // An old BLE status must not roll back a user's first tap.
+  }else{
+   state.slot=received;
+   if(received===pendingSelection.slot||Date.now()>=pendingSelection.until)pendingSelection.slot=null;
+  }
+ }
  if(obj.mode!==undefined)state.mode=Number(obj.mode)||1;
  if(obj.car!==undefined)state.carousel=obj.car==='1';
  if(obj.playing!==undefined)state.playing=obj.playing==='1';
@@ -254,9 +326,10 @@ async function fetchCatalogue(){
  }catch(err){console.warn('Album catalogue unavailable',err);}
  finally{fetching=false;}
 }
-function selectAlbum(n){n=Number(n);if(!Number.isInteger(n)||n<0||n>99)return;state.slot=n;
+function selectAlbum(n){n=Number(n);if(!Number.isInteger(n)||n<0||n>99)return;state.slot=n;pendingSelection.slot=n;pendingSelection.until=Date.now()+4200;
  if(state.mode===3)state.viewOverride='player';
- command('ALBUM:'+n);render();for(const d of ['libraryDialog','liveDialog'])closeDialog(d);
+ command('ALBUM:'+n).then(ok=>{if(!ok)pendingSelection.slot=null});
+ render();for(const d of ['libraryDialog','liveDialog'])closeDialog(d);
 }
 function openDialog(id){const el=$(id);if(id==='libraryDialog')renderLibrary();if(id==='liveDialog')renderLive();if(!el.open)el.showModal();}
 function closeDialog(id){const el=$(id);if(el?.open)el.close();}
@@ -264,59 +337,101 @@ function sheetRow(n){const a=albumEntry(n);const button=document.createElement('
  const details=document.createElement('span');details.className='sheet-item-text';const title=document.createElement('strong');title.textContent=a.title||albumName(n);const sub=document.createElement('small');const count=Array.isArray(a.tracks)?a.tracks.length:Number(a.tracks)||0;sub.textContent=(a.artist?a.artist+' · ':'')+(a.year||'')+(n>=58?' · Live/special':' · Disc '+pad(n))+(count?' · '+count+' tracks':'');details.append(title,sub);
  const arrow=document.createElement('span');arrow.className='chevron';arrow.textContent='›';button.append(art,details,arrow);button.addEventListener('click',()=>selectAlbum(n));return button;
 }
+function searchHeading(value,kind='result-heading'){
+ const el=document.createElement('h3');el.className=kind;el.textContent=value;return el;
+}
 function renderLibrary(){
- const q=text($('librarySearch').value).toLowerCase(),root=$('libraryList');root.replaceChildren();
- let matches=0;
- for(const p of discPoints){const a=albumEntry(p.slot);if(q&&!((pad(p.slot)+' '+(a.artist||'')+' '+(a.title||'')+' '+(a.name||'')+' '+(a.year||'')).toLowerCase().includes(q)))continue;root.append(sheetRow(p.slot));matches++;}
- if(!matches){const p=document.createElement('p');p.className='muted';p.textContent='No matching discs';root.append(p);}
+ const q=text($('librarySearch').value).toLocaleLowerCase().trim();
+ const root=$('libraryList');root.replaceChildren();
+ const src=staticAlbums.size?[...staticAlbums.values()].sort((a,b)=>a.slot-b.slot):[...state.catalogue.values()].sort((a,b)=>a.slot-b.slot);
+ const discs=src.filter(a=>!q||[a.artist,a.title,a.name,pad(a.slot)].some(v=>text(v).toLocaleLowerCase().includes(q)));
+ const matches=q?src.flatMap(a=>(Array.isArray(a.tracks)?a.tracks:[]).map((t,i)=>({album:a,title:t.title||'',index:i+1})).filter(t=>t.title.toLocaleLowerCase().includes(q))):[];
+ root.append(searchHeading('Albums'+(q?' · '+discs.length:'')));
+ let artist='';
+ for(const a of discs){
+  const who=a.artist||'Other artists';
+  if(who!==artist){artist=who;root.append(searchHeading(who,'result-artist'));}
+  root.append(sheetRow(a.slot));
+ }
+ if(!discs.length){const p=document.createElement('p');p.className='no-result-line';p.textContent='No matching album or artist';root.append(p);}
+ if(q){
+  root.append(Object.assign(document.createElement('hr'),{className:'search-divider'}));
+  root.append(searchHeading('Tracks · '+matches.length));
+  artist='';let album=-1;
+  for(const t of matches){
+   const who=t.album.artist||'Other artists';
+   if(who!==artist){artist=who;album=-1;root.append(searchHeading(who,'result-artist'));}
+   if(t.album.slot!==album){album=t.album.slot;root.append(searchHeading(t.album.title||t.album.name,'result-album'));}
+   const b=document.createElement('button');b.type='button';b.className='search-track';
+   const n=document.createElement('span');n.textContent=pad(t.index);
+   const title=document.createElement('span');title.textContent=t.title;b.append(n,title);
+   b.addEventListener('click',()=>{selectAlbum(t.album.slot);closeDialog('libraryDialog');flash('Album selected; jumping to a specific track needs a firmware command.');});
+   root.append(b);
+  }
+  if(!matches.length){const p=document.createElement('p');p.className='no-result-line';p.textContent='No matching track titles';root.append(p);}
+  root.classList.toggle('empty-search',!discs.length&&!matches.length);
+ }else root.classList.remove('empty-search');
 }
 function renderLive(){const root=$('liveList');root.replaceChildren();let slots=[58,59,60,61];const detected=[...state.catalogue.keys()].filter(n=>n>57&&n<100);if(detected.length)slots=detected;for(const n of slots)root.append(sheetRow(n));}
 function setPlayback(){command(state.playing?'PAUSE':'PLAY');state.playing=!state.playing;renderPlayer();renderView();}
 function prevAlbum(){let s=state.slot-1;if(s<1||s>57)s=57;selectAlbum(s);}
 function nextAlbum(){let s=state.slot+1;if(s<1||s>57)s=1;selectAlbum(s);}
 function toggleCarousel(){command('CAROUSEL');state.carousel=!state.carousel;renderSettings();}
+function showPlayer(){
+ if(state.mode!==3){state.mode=3;command('MODE:3');}
+ state.viewOverride='player';render();
+}
+function hidePlayer(){state.viewOverride='frame';renderView();}
+function updateSearchViewport(){
+ const vv=window.visualViewport;
+ if(vv){
+  document.documentElement.style.setProperty('--search-vh',Math.max(140,Math.floor(vv.height))+'px');
+  document.documentElement.style.setProperty('--search-top',Math.max(6,Math.floor(vv.offsetTop)+8)+'px');
+ }
+}
 function wire(){
+ updateSearchViewport();
+ if(window.visualViewport){
+  window.visualViewport.addEventListener('resize',updateSearchViewport);
+  window.visualViewport.addEventListener('scroll',updateSearchViewport);
+ }
  $('connectButton').addEventListener('click',connectPicker);
- $('retryButton').addEventListener('click',async()=>{if(state.device)await attachDevice(state.device);else connectPicker();});
- $('linkButton').addEventListener('click',()=>{if(connected())openDialog('settingsDialog');else if(state.device)attachDevice(state.device);else connectPicker();});
+ $('retryButton').addEventListener('click',async()=>{if(state.device)await attachDevice(state.device);else connectPicker()});
+ $('linkButton').addEventListener('click',()=>{if(connected())openDialog('settingsDialog');else if(state.device)attachDevice(state.device);else connectPicker()});
  $('settingsButton').addEventListener('click',()=>openDialog('settingsDialog'));
  for(const b of document.querySelectorAll('.close-dialog'))b.addEventListener('click',()=>closeDialog(b.dataset.close));
  for(const d of document.querySelectorAll('dialog'))d.addEventListener('click',e=>{if(e.target===d)d.close()});
- $('openLibrary').addEventListener('click',()=>openDialog('libraryDialog'));
  $('portraitBrowse').addEventListener('click',()=>openDialog('libraryDialog'));
- $('portraitSearch').addEventListener('click',()=>{openDialog('libraryDialog');$('librarySearch').focus()});
+ $('portraitSearch').addEventListener('click',()=>{updateSearchViewport();openDialog('libraryDialog');$('librarySearch').focus({preventScroll:true})});
  $('librarySearch').addEventListener('input',renderLibrary);
- $('openLive').addEventListener('click',()=>openDialog('liveDialog'));
- $('portraitLive').addEventListener('click',()=>openDialog('liveDialog'));
- $('portraitNext').addEventListener('click',nextAlbum);$('portraitPrev').addEventListener('click',prevAlbum);
- $('portraitPlayerButton').addEventListener('click',()=>{state.viewOverride='player';renderView()});
- $('toPlayer').addEventListener('click',()=>{state.viewOverride='player';renderView()});
- $('miniOpen').addEventListener('click',()=>{state.viewOverride='player';renderView()});
- $('playerBack').addEventListener('click',()=>{state.viewOverride='frame';renderView()});
- $('miniPlay').addEventListener('click',setPlayback);$('playPause').addEventListener('click',setPlayback);
- $('previousTrack').addEventListener('click',()=>command('PREV'));$('nextTrack').addEventListener('click',()=>command('NEXTTRACK'));
+ $('portraitPlayerButton').addEventListener('click',showPlayer);
+ $('toPlayer').addEventListener('click',showPlayer);
+ $('playerBack').addEventListener('click',hidePlayer);
+ const grabber=$('playerGrabber');let barStart=null;
+ grabber.addEventListener('pointerdown',e=>{barStart=e.clientY;try{grabber.setPointerCapture(e.pointerId)}catch(_){}});
+ grabber.addEventListener('pointerup',e=>{if(barStart!==null&&e.clientY-barStart>50)hidePlayer();barStart=null});
+ grabber.addEventListener('click',hidePlayer);
+ $('artZone').addEventListener('click',()=>openDialog('artDialog'));
+ $('playPause').addEventListener('click',setPlayback);
+ $('previousTrack').addEventListener('click',()=>command('PREV'));
+ $('nextTrack').addEventListener('click',()=>command('NEXTTRACK'));
  $('playerLoop').addEventListener('click',toggleCarousel);$('settingsCarousel').addEventListener('click',toggleCarousel);
- for(const b of document.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>{const m=Number(b.dataset.mode);state.mode=m;state.viewOverride=null;command('MODE:'+m);render();});
- $('slower').addEventListener('click',()=>{command('SLOWER');flash('Carousel speed reduced');});
- $('faster').addEventListener('click',()=>{command('FASTER');flash('Carousel speed increased');});
+ for(const b of document.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>{
+  const m=Number(b.dataset.mode);state.mode=m;state.viewOverride=null;command('MODE:'+m);render();
+ });
+ $('slower').addEventListener('click',()=>{command('SLOWER');flash('Carousel speed reduced')});
+ $('faster').addEventListener('click',()=>{command('FASTER');flash('Carousel speed increased')});
  $('settingsVolume').addEventListener('input',e=>scheduleVolume(Number(e.target.value)));
  $('volumeSlider').addEventListener('input',e=>scheduleVolume(Number(e.target.value)));
- $('muteButton').addEventListener('click',()=>{if(state.volume>0){state.lastVolume=state.volume;scheduleVolume(0)}else scheduleVolume(Math.max(1,state.lastVolume));});
- $('volumeDown').addEventListener('click',()=>scheduleVolume(state.volume-8));
- $('volumeUp').addEventListener('click',()=>scheduleVolume(state.volume+8));
- $('settingsDisconnect').addEventListener('click',()=>{closeDialog('settingsDialog');disconnect();});
- $('seekBar').addEventListener('input',e=>{e.target.value=String(state.seconds);flash('Seeking needs a BLE firmware update; no seek command sent.');});
- $('seekBar').addEventListener('change',e=>e.target.value=String(state.seconds));
- const zone=$('artZone');
- zone.addEventListener('pointerdown',e=>{gesture={x:e.clientX,y:e.clientY,startVolume:state.volume,kind:null};try{zone.setPointerCapture(e.pointerId)}catch(_){}});
- zone.addEventListener('pointermove',e=>{if(!gesture)return;const dx=e.clientX-gesture.x,dy=e.clientY-gesture.y;
- if(!gesture.kind&&Math.max(Math.abs(dx),Math.abs(dy))>18)gesture.kind=Math.abs(dy)>Math.abs(dx)*1.2?'volume':'seek';
- if(gesture.kind==='volume'){const vol=Math.max(0,Math.min(127,gesture.startVolume-Math.round(dy/2)));scheduleVolume(vol);$('gestureVolume').textContent='Volume '+Math.round(vol/127*100)+'%';$('gestureVolume').hidden=false;}
+ $('muteButton').addEventListener('click',()=>{
+  if(state.volume>0){state.lastVolume=state.volume;scheduleVolume(0)}
+  else scheduleVolume(Math.max(1,state.lastVolume));renderPlayer();
  });
- const endGesture=()=>{if(gesture?.kind==='seek')flash('Horizontal seeking requires a firmware BLE command.');gesture=null;$('gestureVolume').hidden=true;};
- zone.addEventListener('pointerup',endGesture);zone.addEventListener('pointercancel',endGesture);
- window.addEventListener('orientationchange',()=>setTimeout(renderView,160));
- window.addEventListener('resize',renderView);
+ $('settingsDisconnect').addEventListener('click',()=>{closeDialog('settingsDialog');disconnect()});
+ $('seekBar').addEventListener('input',e=>{e.target.value=String(state.seconds);flash('Seeking needs a BLE firmware update; no seek command sent.')});
+ $('seekBar').addEventListener('change',e=>e.target.value=String(state.seconds));
+ window.addEventListener('orientationchange',()=>setTimeout(()=>{renderView();layoutPortraitGrid();layoutLandscapeFrame()},160));
+ window.addEventListener('resize',()=>{renderView();layoutPortraitGrid();layoutLandscapeFrame()});
  document.addEventListener('keydown',e=>{if(e.key==='Escape')for(const d of document.querySelectorAll('dialog[open]'))d.close()});
 }
 async function init(){

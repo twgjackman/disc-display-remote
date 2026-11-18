@@ -1,4 +1,4 @@
-# Disc Display Remote — production v1.1
+# Disc Display Remote — production v1.2
 
 A mobile-first, offline-capable progressive web app controlling the physical Gregg Jackman framed disc collection over Web Bluetooth. Production source deliberately contains no BLE debug/log/serial/board-test controls.
 
@@ -27,3 +27,13 @@ This webapp does not stream sound from the phone; it controls the frame's microS
 - The last four slots (58–61) are non-disc albums and only use square artwork.
 - Original track names are shown in the player and accessible through the library. Track-number jumps and seeking require new BLE firmware commands; clicking a track cannot currently select it.
 - Android physical volume keys cannot be redirected to independent Bluetooth GATT volume through an ordinary PWA; v1.1 adds clear on-screen +/- steps alongside the slider/vertical swipe.
+
+## v1.2 layout and interaction
+- The frame is rebuilt from individual `Discs 2x4.pptx` images, with certification colours read from picture outlines: silver = black, gold = gold, platinum = white.
+- Textured platinum backplates are taken from the PowerPoint oval fill: slot 3 ×3 blanks, 10 ×4, 13 ×1, 20 ×1, 23 ×2, 26 ×1, 28 ×1, 44 ×1, 45 ×4, 48 ×1. Front artwork is counted as one additional platinum.
+- Landscape displays five physical rows and a Grammy/live album target at visual position 58. Tap targets travel with their circle images rather than relying on coordinates over a flattened screenshot.
+- Portrait transposes physical rows into five vertical columns; each column has matching first/last disc heights. Spacing is weighted for platinum stacks to avoid overlap.
+- Search returns albums by artist/title, then matching tracks grouped by artist and album. Search dialog is top-aligned and keyboard-aware.
+- Now Playing is a portrait overlay that can be dismissed via the grabber, with art zoom, vertical volume slider, and decorative stereo activity meters. Meters are illustrative, not audio level measurements.
+- Physical phone hardware volume keys cannot be captured by the browser PWA. BLE playback and settings retain the production command set. Direct track jump and scrubbing still require firmware support.
+- Production source retains no diagnostic or simulated-system BLE controls.
