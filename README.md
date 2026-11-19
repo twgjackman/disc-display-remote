@@ -1,4 +1,4 @@
-# Disc Display Remote — production v1.2
+# Disc Display Remote — production v1.3
 
 A mobile-first, offline-capable progressive web app controlling the physical Gregg Jackman framed disc collection over Web Bluetooth. Production source deliberately contains no BLE debug/log/serial/board-test controls.
 
@@ -37,3 +37,14 @@ This webapp does not stream sound from the phone; it controls the frame's microS
 - Now Playing is a portrait overlay that can be dismissed via the grabber, with art zoom, vertical volume slider, and decorative stereo activity meters. Meters are illustrative, not audio level measurements.
 - Physical phone hardware volume keys cannot be captured by the browser PWA. BLE playback and settings retain the production command set. Direct track jump and scrubbing still require firmware support.
 - Production source retains no diagnostic or simulated-system BLE controls.
+
+## v1.3 interface refinements
+- Landscape player: full viewport two-column layout, no permanent topbar, no Now Playing heading, no collection eyebrow; just a compact X to return to the frame. The left column fits album/volume/playback controls on one landscape screen while the right track list scrolls independently.
+- Landscape frame: the wood-textured bottom strip now contains the Now Playing chip, a text-width sales plaque, and a background-free settings icon.
+- Landscape Settings modal is centred, bordered on all four sides and constrained to the available screen height. The BLE override explanatory line has been removed (behaviour unchanged).
+- Portrait: "View all" removed; search icon only; persistent footer button renamed to "Now Playing."
+- Portrait album stacks: reflective jewel-side CD undersides show successive exposed TOP edges; the printed album is the bottom/front disc of the stack. The first and last printed album images of all five columns align, including the Ultimate Kylie stack.
+- Portrait player drawer: wider grabber, inset from the top; pointer dragging moves the whole drawer. Short drag springs back; passing a dismissal threshold sends it offscreen to reveal the collection. Simply tapping no longer closes it.
+- Visible physical disc numbers removed from interface labels, tooltips and metadata; numeric slot IDs remain private BLE protocol details.
+- Stereo meter animation uses an absolute-height green -> yellow -> orange -> red gradient. Lower green readings do not show higher-level colours. Meter movement is illustrative, not derived from audio sample levels.
+- Original generated blank CD underside art was created for this project, and cached offline. The previous brushed metal disc image remains in the repository history.

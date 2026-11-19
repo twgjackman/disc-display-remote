@@ -177,3 +177,222 @@ dialog.search-sheet{position:fixed!important;top:var(--search-top,max(8px,env(sa
 
 .landscape-now-title{font-size:.66rem;letter-spacing:.15em;color:var(--muted);font-weight:800}
 @media(orientation:portrait){.landscape-now-title{display:none}}
+
+/* v1.3 — compact landscape player, bottom wood strip, aligned CD stacks */
+.frame-footer{
+ position:absolute;z-index:8;bottom:0;left:0;right:0;
+ height:clamp(37px,9.4%,55px);
+ display:grid;grid-template-columns:minmax(90px,1fr) auto minmax(45px,1fr);
+ align-items:center;justify-items:center;gap:7px;padding:3px 10px;
+ background:transparent;
+}
+.frame-footer .frame-plaque{
+ position:static!important;transform:none!important;
+ height:auto!important;min-height:25px;max-width:100%;width:max-content!important;
+ display:inline-flex;align-items:center;justify-content:center;
+ padding:4px clamp(9px,1.8vw,20px);
+ font-size:clamp(8px,1.15vmin,14px);
+ line-height:1.1;letter-spacing:0;font-weight:850;
+ box-shadow:0 1px 3px #33210d7a;
+}
+.frame-now-playing{
+ justify-self:start;display:flex;align-items:center;justify-content:center;gap:6px;
+ min-height:30px;min-width:0;padding:4px 9px;
+ font-size:clamp(10px,1.3vmin,14px);font-weight:680;
+ border:1px solid #243639a8;border-radius:7px;
+ background:#102328d9;color:#f6f4ed;white-space:nowrap;
+}
+.frame-now-playing .ui-icon{width:16px;height:16px;fill:currentColor;stroke:none;}
+.frame-settings-button{
+ justify-self:end;display:grid;place-items:center;min-width:38px;min-height:34px;
+ border:0!important;border-radius:0!important;background:transparent!important;
+ color:#1b221d;filter:drop-shadow(0 1px 1px #fff5);padding:3px;
+}
+.frame-settings-button .ui-icon{width:24px;height:24px;stroke-width:1.8}
+.frame-rows{bottom:clamp(41px,10.2%,59px)}
+.frame-disc-button .platinum-blank,.portrait-disc-button .platinum-blank{
+ background-image:url('./assets/blank-cd-underside.webp')!important;
+ background-position:center;background-size:100% 100%;filter:drop-shadow(0 1px 2px #1119);
+}
+.frame-disc-button .disc-main,.portrait-disc-button .disc-main{z-index:3}
+.frame-disc-button .platinum-blank,.portrait-disc-button .platinum-blank{z-index:2}
+.frame-disc-button .grammy-art,.portrait-disc-button .grammy-art{z-index:4}
+@media(orientation:landscape){
+ body.connected .frame-page{height:100dvh!important;max-width:none!important;padding:0!important}
+ body.connected .frame-stage{height:100dvh!important}
+ body.connected .frame-rows{inset:0.9% .45% clamp(41px,10.2%,59px)!important}
+ body.connected .frame-footer{height:clamp(37px,9.4%,55px)}
+ body.connected .frame-footer #toPlayer{
+  display:flex;position:static;min-height:30px;padding:4px 9px;
+  background:#102328d9;border:1px solid #354a4ac9;
+ }
+ body.connected .frame-footer #toPlayer[hidden]{display:none!important}
+ body.connected .topbar{display:none!important}
+ body.connected.player-active #playerPage{
+  position:fixed;inset:0;display:block;margin:0!important;
+  width:100vw;max-width:none;height:100dvh;padding:0 8px 0;
+  border:0;overflow:hidden;background:#101719;
+ }
+ body.connected.player-active .player-heading{
+  position:absolute;left:0;top:0;right:0;z-index:30;
+  height:0!important;min-height:0;margin:0!important;padding:0!important;
+  background:transparent!important;
+ }
+ body.connected.player-active #playerBack{
+  display:grid;place-items:center;position:fixed;left:7px;top:6px;
+  width:35px;min-height:35px;height:35px;z-index:30;
+  padding:0;background:#132528e0;border:1px solid #52676a;
+  border-radius:8px;font-size:27px;font-weight:300;line-height:1;
+ }
+ body.connected.player-active .landscape-now-title,
+ body.connected.player-active .player-heading .heading-spacer{display:none!important}
+ body.connected.player-active .player-content{
+  display:grid;grid-template-columns:minmax(0,0.98fr) minmax(0,1.12fr);
+  gap:11px;width:100%;height:100dvh;max-height:100dvh;min-height:0;
+  align-items:stretch;padding:3px 0;
+ }
+ body.connected.player-active .player-hero{
+  display:flex;flex-direction:column;justify-content:space-evenly;
+  gap:1px;width:100%;height:100%;max-height:100%;
+  overflow:hidden!important;min-width:0;min-height:0;
+  padding:2px 5px 3px;
+ }
+ body.connected.player-active .album-control-row{
+  flex:0 1 auto;width:min(100%,calc(45dvh + 75px));
+  max-width:min(100%,420px);height:auto;min-height:0;
+  grid-template-columns:34px minmax(0,1fr) 34px;
+  gap:5px;margin:0 auto;
+ }
+ body.connected.player-active .art-zone{
+  max-width:min(43dvh,330px)!important;width:100%!important;
+  height:auto!important;margin:auto;
+ }
+ body.connected.player-active .vertical-volume,
+ body.connected.player-active .stereo-meters{
+  max-height:min(43dvh,330px)!important;
+ }
+ body.connected.player-active .playing-details{
+  flex:0 0 auto;width:100%;padding:1px 0 1px;
+ }
+ body.connected.player-active .playing-details h1{
+  margin:0;font-size:clamp(.94rem,2.4vmin,1.15rem);line-height:1.15;
+  max-height:2.4em;overflow:hidden;
+ }
+ body.connected.player-active .playing-details p{
+  line-height:1.2;font-size:clamp(.7rem,1.8vmin,.82rem);
+ }
+ body.connected.player-active .seeker{flex:0 0 auto;width:100%;margin:0;}
+ body.connected.player-active .seeker input{margin:0;width:100%;height:12px;}
+ body.connected.player-active .timeline{font-size:.62rem;}
+ body.connected.player-active .transport{
+  flex:0 0 auto;max-width:400px;min-height:44px;
+  margin:1px auto 2px;justify-content:space-between;
+ }
+ body.connected.player-active .transport button{
+  min-height:37px;width:38px;flex-basis:38px;
+ }
+ body.connected.player-active .transport .play-primary{
+  width:45px;height:45px;min-height:45px;flex-basis:45px;padding:10px;
+ }
+ body.connected.player-active .transport .play-primary .ui-icon{width:23px;height:23px;}
+ body.connected.player-active .tracks-panel{
+  height:100%;max-height:none!important;min-height:0;
+  overflow-y:auto;padding:11px 12px 20px;
+  border-radius:10px;align-self:stretch;
+ }
+ dialog.sheet.settings-sheet{
+  position:fixed!important;inset:50% auto auto 50%!important;
+  transform:translate(-50%,-50%)!important;
+  margin:0!important;padding:15px 18px 18px!important;
+  width:min(610px,calc(100vw - 20px))!important;
+  max-width:none!important;max-height:calc(100dvh - 20px)!important;
+  border:1px solid #526a70!important;border-radius:18px!important;
+  overflow-y:auto!important;overscroll-behavior:contain;
+  box-shadow:0 14px 55px #000b;
+ }
+ dialog.sheet.settings-sheet .sheet-head{
+  top:-15px;margin-top:-8px;
+  padding:5px 1px 9px;
+ }
+ dialog.sheet.settings-sheet .settings-group{padding:10px 0}
+ dialog.sheet.settings-sheet .hint{margin-top:4px}
+ dialog.sheet.settings-sheet .setting-row{gap:10px}
+}
+@media(orientation:portrait){
+ .portrait-grid{column-gap:4px!important}
+ .portrait-now-button{font-weight:720}
+ .portrait-page .selected-caption{justify-content:flex-start;padding-left:10px}
+ #portraitSearch{
+  width:43px;min-width:43px;height:42px;padding:7px;
+  display:grid;place-items:center;border-radius:13px;
+ }
+ #portraitSearch .ui-icon{width:23px;height:23px;}
+ .player-page:not([hidden]){
+  will-change:transform;touch-action:pan-y;
+  padding-top:0;
+ }
+ .player-page.drawer-moving{will-change:transform}
+ .player-page .player-heading{
+  top:0!important;width:100%;height:67px!important;
+  padding:10px 0 0!important;margin:0!important;
+  display:flex!important;align-items:stretch!important;
+  justify-content:center!important;
+  background:#1b2929ec;
+ }
+ .player-page .player-grabber{
+  display:flex!important;flex:1 1 100%;width:100%;
+  height:100%;min-height:52px;
+  justify-content:flex-start;align-items:center;flex-direction:column;
+  padding:6px 0 9px;gap:9px;touch-action:none;
+  user-select:none;-webkit-user-select:none;
+ }
+ .player-page .grabber-bar{width:56px;height:5px;}
+ .player-page .player-overline{font-size:.66rem;}
+}
+@media (max-height:370px) and (orientation:landscape){
+ body.connected.player-active .art-zone{max-width:37dvh!important}
+ body.connected.player-active .vertical-volume,
+ body.connected.player-active .stereo-meters{max-height:37dvh!important}
+ body.connected.player-active .album-control-row{width:min(100%,calc(39dvh + 75px))}
+ body.connected.player-active .playing-details h1{font-size:.93rem}
+ body.connected.player-active .transport{min-height:39px}
+ body.connected.player-active .transport .play-primary{width:41px;height:41px;min-height:41px;flex-basis:41px}
+}
+/* Meters represent visually plausible level activity, NOT measured audio.
+   The colour ramp is anchored to the entire track: short green bars cannot
+   show yellow/orange/red until reaching the appropriate physical thresholds. */
+.meter-track{position:relative!important;overflow:hidden}
+.meter-fill{
+ position:absolute!important;inset:0!important;display:block;
+ width:100%!important;height:100%!important;
+ background:linear-gradient(to top,
+   #198b58 0%,#26bb70 38%,#54d889 56%,
+   #e4c747 64%,#f0c43a 75%,
+   #e79b30 79%,#ef8730 89%,
+   #dc474b 92%,#b82d40 100%)!important;
+ clip-path:inset(97% 0 0 0);
+ opacity:.25;transition:none;
+}
+.stereo-meters.is-playing .meter-left{
+ opacity:.94;animation:meter-fixed-left .84s infinite alternate ease-in-out!important;
+}
+.stereo-meters.is-playing .meter-right{
+ opacity:.94;animation:meter-fixed-right .71s infinite alternate ease-in-out!important;
+}
+@keyframes meter-fixed-left{
+ 0%{clip-path:inset(79% 0 0)}
+ 28%{clip-path:inset(55% 0 0)}
+ 62%{clip-path:inset(31% 0 0)}
+ 100%{clip-path:inset(12% 0 0)}
+}
+@keyframes meter-fixed-right{
+ 0%{clip-path:inset(62% 0 0)}
+ 23%{clip-path:inset(32% 0 0)}
+ 59%{clip-path:inset(76% 0 0)}
+ 100%{clip-path:inset(6% 0 0)}
+}
+@media(prefers-reduced-motion:reduce){
+ .stereo-meters.is-playing .meter-fill{
+  animation:none!important;clip-path:inset(48% 0 0)!important
+ }
+}

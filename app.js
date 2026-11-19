@@ -1,4 +1,4 @@
-/* Disc Display Remote production v1.2 — no diagnostic or bench-test protocol */
+/* Disc Display Remote production v1.3 — no diagnostic or bench-test protocol */
 'use strict';
 const SERVICE='aba54e10-58de-4f40-b0c8-d65de1250001';
 const COMMAND='aba54e10-58de-4f40-b0c8-d65de1250002';
@@ -44,9 +44,9 @@ function formatSeconds(n){n=Math.max(0,Number(n)||0);return Math.floor(n/60)+':'
 function albumEntry(n){
  const slot=Number(n);const sd=state.catalogue.get(slot)||{};
  const local=staticAlbums.get(slot);
- return local?{...sd,...local,sdTracks:sd.tracks}:({...sd,slot,name:sd.name||('Disc '+pad(slot)),tracks:[]});
+ return local?{...sd,...local,sdTracks:sd.tracks}:({...sd,slot,name:sd.name||'Album artwork',tracks:[]});
 }
-function albumName(n){const a=albumEntry(n);return a.name?.replace(/^\d{2}\s+/, '')||'Disc '+pad(n)}
+function albumName(n){const a=albumEntry(n);return a.name?.replace(/^\d{2}\s+/, '')||'Album artwork'}
 
 function connected(){return Boolean(state.server&&state.server.connected&&state.command)}
 function saveCatalogue(){try{localStorage.setItem('disc-display-catalog-v1',JSON.stringify([...state.catalogue.values()]));}catch(_){}}
@@ -77,7 +77,7 @@ function discButton(n,variant){
   const art=document.createElement('div');art.className='grammy-art';b.append(art);
   b.addEventListener('click',()=>openDialog('liveDialog'));return b;
  }
- b.setAttribute('aria-label','Select '+albumName(n));b.title='Disc '+pad(n)+' · '+albumName(n);
+ b.setAttribute('aria-label','Select '+albumName(n));b.title=albumName(n);
  for(let i=0;i<blankCount(n);i++){
   const blank=document.createElement('span');blank.className='platinum-blank';b.append(blank);
  }
@@ -94,15 +94,18 @@ function buildFrame(){
 }
 function layoutLandscapeFrame(){
  const root=$('frameRows');if(!root?.clientWidth||!root.clientHeight)return;
- const W=root.clientWidth,H=root.clientHeight,D=Math.max(12,Math.floor(Math.min((W-6)/13.25,H/5*.90)));
+ const W=root.clientWidth,H=root.clientHeight;
+ const weightedMax=Math.max(...FRAME_ROWS.map(row=>row.length+row.reduce((sum,n)=>sum+blankCount(n)*.13,0)+(row.length-1)*.075));
+ const D=Math.max(10,Math.floor(Math.min((W-4)/weightedMax,H/5*.91)));
  root.style.setProperty('--frame-disc-size',D+'px');
  for(const row of root.children){
   row.style.height=H/5+'px';
   for(const b of row.children){
    const n=Number(b.dataset.slot),extra=n===58?0:blankCount(n)*D*.13;
    b.style.width=D+extra+'px';b.style.height=D+'px';b.style.setProperty('--disc-size',D+'px');
-   const art=b.querySelector('.disc-main,.grammy-art');if(art)art.style.left=extra+'px';
-   b.querySelectorAll('.platinum-blank').forEach((x,i)=>{x.style.left=i*D*.13+'px';x.style.top='0px'});
+   const art=b.querySelector('.disc-main,.grammy-art');
+   if(art){art.style.left=extra+'px';art.style.top='0px';}
+   b.querySelectorAll('.platinum-blank').forEach((x,i)=>{x.style.left=i*D*.13+'px';x.style.top='0px';});
   }
  }
 }
@@ -115,26 +118,40 @@ function buildPortraitGrid(){
  requestAnimationFrame(layoutPortraitGrid);
 }
 function layoutPortraitGrid(){
- const grid=$('portraitGrid');if(!grid?.clientWidth)return;
- const D=Math.max(30,Math.floor((grid.clientWidth-12)/5));
- const minima=FRAME_ROWS.map(slots=>{
-  let h=D;for(let i=0;i<slots.length-1;i++)h+=D*(1.065+.16*blankCount(slots[i]));
-  return h;
- });
- const H=Math.ceil(Math.max(...minima))+6;
- grid.style.height=H+'px';grid.style.setProperty('--portrait-disc-size',D+'px');
- FRAME_ROWS.forEach((slots,ri)=>{
-  const buttons=[...grid.children[ri].children];
-  const extra=(H-minima[ri])/Math.max(1,slots.length-1);
-  let top=0;
-  buttons.forEach((b,i)=>{
-   const n=slots[i],layers=blankCount(n);
-   b.style.width=D+'px';b.style.height=D*(1+layers*.16)+'px';b.style.top=top+'px';
+ const grid=$('portraitGrid');if(!grid?.clientWidth||!grid.children.length)return;
+ const colGap=4, D=Math.max(26,Math.floor((grid.clientWidth-(colGap*4)-2)/5));
+ const step=D*.155, gap=Math.max(3,D*.045);
+ // Album cover is the FRONT/BOTTOM disc. Every blank CD sits behind it,
+ // showing a distinct upper crescent. Position based on cover top, not
+ // the stack's bounding box, so all five last album covers finish level.
+ const required=FRAME_ROWS.map(row=>row.slice(1).reduce((sum,n)=>sum+D+gap+blankCount(n)*step,0));
+ const lastCoverY=Math.max(...required);
+ const totalHeight=Math.ceil(lastCoverY+D+2);
+ grid.style.height=totalHeight+'px';
+ grid.style.setProperty('--portrait-disc-size',D+'px');
+ FRAME_ROWS.forEach((row,ri)=>{
+  const col=grid.children[ri];
+  const buttons=[...col.children];
+  const distributedGap=(lastCoverY-required[ri])/Math.max(1,row.length-1);
+  let artY=0;
+  for(let i=0;i<buttons.length;i++){
+   const b=buttons[i],n=row[i],layers=blankCount(n);
+   const upper=layers*step;
+   b.style.left='0px';
+   b.style.top=(artY-upper)+'px';
+   b.style.width=D+'px';
+   b.style.height=(D+upper)+'px';
    b.style.setProperty('--disc-size',D+'px');
-   const art=b.querySelector('.disc-main,.grammy-art');if(art)art.style.left='0px';
-   b.querySelectorAll('.platinum-blank').forEach((el,j)=>{el.style.left='0px';el.style.top=(j+1)*.16*D+'px'});
-   if(i<buttons.length-1)top+=D*(1.065+layers*.16)+extra;
-  });
+   const art=b.querySelector('.disc-main,.grammy-art');
+   if(art){art.style.left='0px';art.style.top=upper+'px';}
+   b.querySelectorAll('.platinum-blank').forEach((el,j)=>{
+    el.style.left='0px';el.style.top=j*step+'px';
+   });
+   if(i<row.length-1){
+    const next=row[i+1];
+    artY+=D+gap+distributedGap+blankCount(next)*step;
+   }
+  }
  });
 }
 function renderMeta(){
@@ -142,17 +159,16 @@ function renderMeta(){
  const artist=detail?.artist||'';
  const year=detail?.year?' · '+detail.year:'';
  const title=detail?.title||name;
- $('frameSelected').textContent=n?pad(n)+' · '+name:'Select a disc';
  $('portraitAlbum').textContent=n?title:'Choose a disc';
- $('portraitArtist').textContent=n?(artist?artist+year:'Disc '+pad(n)):'Tap an album in the collection';
- $('portraitMeta').textContent=n>=58?'Live/special album · no physical disc':(n?'Physical disc '+pad(n):'The frame contains 57 physical discs');
+ $('portraitArtist').textContent=n?(artist?artist+year:'Album selected'):'Tap an album in the collection';
+ $('portraitMeta').textContent=n>=58?'Live / special album':(n?'From the framed collection':'Choose an album from the collection');
  crop($('portraitDisc'),n);
  crop($('playerCover'),n);crop($('fullscreenCover'),n);$('artDialogTitle').textContent=(detail?.artist?detail.artist+' · ':'')+(detail?.title||name);
- $('albumLabel').textContent=n?(artist?artist+' · ':'')+title+' · '+pad(n):'—';
+ $('albumLabel').textContent=n?(artist?artist+' · ':'')+title:'—';
  $('songTitle').textContent=state.title||((state.playing&&n)?title:'No track selected');
  $('songArtist').textContent=state.artist||artist||'—';
  $('modeCaption').textContent=['','E-ink display','LED display','Audio mode'][state.mode]||'Display';
- $('currentCaption').textContent=n?pad(n)+' · '+name:'No disc selected';
+ $('currentCaption').textContent=n?name:'No album selected';
  for(const b of document.querySelectorAll('.frame-disc-button,.portrait-disc-button')){
  const active=Number(b.dataset.slot)===n;b.classList.toggle('selected',active);
  b.setAttribute('aria-pressed',String(active));
@@ -219,6 +235,7 @@ function renderView(){
  $('toPlayer').hidden=!audio;$('portraitPlayerButton').hidden=!p;
  document.body.classList.toggle('landscape',!p);document.body.classList.toggle('connected',state.connected);
  document.body.classList.toggle('player-open',showPlayer&&p);
+ document.body.classList.toggle('player-active',showPlayer);
  $('playerBack').hidden=p;
  if(!p&&!showPlayer)requestAnimationFrame(layoutLandscapeFrame);
  if(p)requestAnimationFrame(layoutPortraitGrid);
@@ -334,7 +351,7 @@ function selectAlbum(n){n=Number(n);if(!Number.isInteger(n)||n<0||n>99)return;st
 function openDialog(id){const el=$(id);if(id==='libraryDialog')renderLibrary();if(id==='liveDialog')renderLive();if(!el.open)el.showModal();}
 function closeDialog(id){const el=$(id);if(el?.open)el.close();}
 function sheetRow(n){const a=albumEntry(n);const button=document.createElement('button');button.type='button';button.className='sheet-item';const art=discElement(n);
- const details=document.createElement('span');details.className='sheet-item-text';const title=document.createElement('strong');title.textContent=a.title||albumName(n);const sub=document.createElement('small');const count=Array.isArray(a.tracks)?a.tracks.length:Number(a.tracks)||0;sub.textContent=(a.artist?a.artist+' · ':'')+(a.year||'')+(n>=58?' · Live/special':' · Disc '+pad(n))+(count?' · '+count+' tracks':'');details.append(title,sub);
+ const details=document.createElement('span');details.className='sheet-item-text';const title=document.createElement('strong');title.textContent=a.title||albumName(n);const sub=document.createElement('small');const count=Array.isArray(a.tracks)?a.tracks.length:Number(a.tracks)||0;sub.textContent=(a.artist?a.artist+' · ':'')+(a.year||'')+(n>=58?' · Live / special':'')+(count?' · '+count+' tracks':'');details.append(title,sub);
  const arrow=document.createElement('span');arrow.className='chevron';arrow.textContent='›';button.append(art,details,arrow);button.addEventListener('click',()=>selectAlbum(n));return button;
 }
 function searchHeading(value,kind='result-heading'){
@@ -344,7 +361,7 @@ function renderLibrary(){
  const q=text($('librarySearch').value).toLocaleLowerCase().trim();
  const root=$('libraryList');root.replaceChildren();
  const src=staticAlbums.size?[...staticAlbums.values()].sort((a,b)=>a.slot-b.slot):[...state.catalogue.values()].sort((a,b)=>a.slot-b.slot);
- const discs=src.filter(a=>!q||[a.artist,a.title,a.name,pad(a.slot)].some(v=>text(v).toLocaleLowerCase().includes(q)));
+ const discs=src.filter(a=>!q||[a.artist,a.title,a.name].some(v=>text(v).toLocaleLowerCase().includes(q)));
  const matches=q?src.flatMap(a=>(Array.isArray(a.tracks)?a.tracks:[]).map((t,i)=>({album:a,title:t.title||'',index:i+1})).filter(t=>t.title.toLocaleLowerCase().includes(q))):[];
  root.append(searchHeading('Albums'+(q?' · '+discs.length:'')));
  let artist='';
@@ -399,18 +416,59 @@ function wire(){
  $('retryButton').addEventListener('click',async()=>{if(state.device)await attachDevice(state.device);else connectPicker()});
  $('linkButton').addEventListener('click',()=>{if(connected())openDialog('settingsDialog');else if(state.device)attachDevice(state.device);else connectPicker()});
  $('settingsButton').addEventListener('click',()=>openDialog('settingsDialog'));
+ $('frameSettingsButton').addEventListener('click',()=>openDialog('settingsDialog'));
  for(const b of document.querySelectorAll('.close-dialog'))b.addEventListener('click',()=>closeDialog(b.dataset.close));
  for(const d of document.querySelectorAll('dialog'))d.addEventListener('click',e=>{if(e.target===d)d.close()});
- $('portraitBrowse').addEventListener('click',()=>openDialog('libraryDialog'));
  $('portraitSearch').addEventListener('click',()=>{updateSearchViewport();openDialog('libraryDialog');$('librarySearch').focus({preventScroll:true})});
  $('librarySearch').addEventListener('input',renderLibrary);
  $('portraitPlayerButton').addEventListener('click',showPlayer);
  $('toPlayer').addEventListener('click',showPlayer);
  $('playerBack').addEventListener('click',hidePlayer);
- const grabber=$('playerGrabber');let barStart=null;
- grabber.addEventListener('pointerdown',e=>{barStart=e.clientY;try{grabber.setPointerCapture(e.pointerId)}catch(_){}});
- grabber.addEventListener('pointerup',e=>{if(barStart!==null&&e.clientY-barStart>50)hidePlayer();barStart=null});
- grabber.addEventListener('click',hidePlayer);
+ const grabber=$('playerGrabber'),drawer=$('playerPage');
+ let drawerGesture=null,drawerFinishing=false;
+ function settleDrawer(shouldDismiss){
+  if(drawerFinishing||!drawerGesture)return;
+  drawerGesture=null;
+  drawer.style.transition='transform 250ms cubic-bezier(.2,.7,.25,1)';
+  drawer.classList.add('drawer-moving');
+  if(shouldDismiss){
+   drawerFinishing=true;
+   drawer.style.transform='translate3d(0,100dvh,0)';
+   const finish=()=>{
+    hidePlayer();drawer.style.transition='';drawer.style.transform='';
+    drawer.classList.remove('drawer-moving');drawerFinishing=false;
+   };
+   if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)finish();
+   else window.setTimeout(finish,260);
+  }else{
+   drawer.style.transform='translate3d(0,0,0)';
+   window.setTimeout(()=>{
+    drawer.style.transition='';drawer.style.transform='';
+    drawer.classList.remove('drawer-moving');
+   },260);
+  }
+ }
+ grabber.addEventListener('pointerdown',e=>{
+  if(!isPortrait()||drawerFinishing||$('playerPage').hidden)return;
+  drawer.style.transition='none';
+  drawerGesture={pointerId:e.pointerId,startY:e.clientY,distance:0};
+  try{grabber.setPointerCapture(e.pointerId)}catch(_){}
+ });
+ grabber.addEventListener('pointermove',e=>{
+  if(!drawerGesture||e.pointerId!==drawerGesture.pointerId)return;
+  const dist=Math.max(0,e.clientY-drawerGesture.startY);
+  drawerGesture.distance=dist;drawer.style.transform='translate3d(0,'+dist+'px,0)';
+  if(dist>0)e.preventDefault();
+ });
+ grabber.addEventListener('pointerup',e=>{
+  if(!drawerGesture||e.pointerId!==drawerGesture.pointerId)return;
+  const threshold=Math.min(170,Math.max(105,window.innerHeight*.20));
+  settleDrawer(drawerGesture.distance>threshold);
+ });
+ grabber.addEventListener('pointercancel',()=>settleDrawer(false));
+ grabber.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){e.preventDefault();hidePlayer();}
+ });
  $('artZone').addEventListener('click',()=>openDialog('artDialog'));
  $('playPause').addEventListener('click',setPlayback);
  $('previousTrack').addEventListener('click',()=>command('PREV'));
@@ -432,7 +490,12 @@ function wire(){
  $('seekBar').addEventListener('change',e=>e.target.value=String(state.seconds));
  window.addEventListener('orientationchange',()=>setTimeout(()=>{renderView();layoutPortraitGrid();layoutLandscapeFrame()},160));
  window.addEventListener('resize',()=>{renderView();layoutPortraitGrid();layoutLandscapeFrame()});
- document.addEventListener('keydown',e=>{if(e.key==='Escape')for(const d of document.querySelectorAll('dialog[open]'))d.close()});
+ document.addEventListener('keydown',e=>{
+  if(e.key!=='Escape')return;
+  const opened=document.querySelectorAll('dialog[open]');
+  if(opened.length)for(const d of opened)d.close();
+  else if(!$('playerPage').hidden)hidePlayer();
+ });
 }
 async function init(){
  loadCatalogue();buildFrame();buildPortraitGrid();wire();renderLibrary();renderLive();render();void loadAlbumMetadata();
