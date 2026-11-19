@@ -7,7 +7,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="./styles.css">
-<title>Disc Display · v1.3</title>
+<title>Disc Display · v1.4</title>
 </head><body>
 <div id="app">
 <header class="topbar">
@@ -49,7 +49,7 @@
   <div class="player-content">
    <div class="player-hero">
     <div class="album-control-row">
-      <div class="vertical-volume"><label for="volumeSlider">VOL</label><input id="volumeSlider" type="range" min="0" max="127" value="32" aria-label="Speaker volume" orient="vertical"><span id="volumeText">—</span></div>
+      <div class="vertical-volume"><label for="volumeSlider">VOL</label><input id="volumeSlider" type="range" min="0" max="127" value="32" aria-label="Speaker volume" orient="vertical"></div>
       <button class="art-zone" id="artZone" type="button" aria-label="Show album artwork full screen"><div id="playerCover" class="disc-image cover"></div></button>
       <div id="stereoMeters" class="stereo-meters" role="img" aria-label="Illustrative stereo activity, not measured audio levels"><span class="meter-title">L&nbsp;R</span><div class="meter-columns"><div class="meter-track"><span class="meter-fill meter-left"></span></div><div class="meter-track"><span class="meter-fill meter-right"></span></div></div><span class="meter-foot">STEREO</span></div>
     </div>
@@ -74,6 +74,7 @@
  <div class="settings-group"><label class="setting-label">Operating mode</label><div class="segmented"><button type="button" data-mode="1">E-ink</button><button type="button" data-mode="2">LED</button><button type="button" data-mode="3">Audio</button></div></div>
  <div class="settings-group"><div class="setting-row"><div><strong>Carousel</strong><small>Automatically advance through albums</small></div><button type="button" id="settingsCarousel" class="loop-button" aria-pressed="false" aria-label="Play once" title="Carousel on / play once"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2 21 6 17 10M3 11V9a3 3 0 0 1 3-3h15M7 22 3 18l4-4M21 13v2a3 3 0 0 1-3 3H3"/></svg><span class="once-mark">1</span></button></div><div class="setting-row interval-row"><span>Carousel interval</span><div><button type="button" id="slower" class="tertiary" title="Slower carousel">− Slower</button><button type="button" id="faster" class="tertiary" title="Faster carousel">+ Faster</button></div></div><p class="hint">The ESP32 adjusts a set of predefined intervals. The precise interval is not currently reported over BLE.</p></div>
  <div class="settings-group"><label class="setting-label" for="settingsVolume">Speaker volume <span id="settingsVolumeValue">—</span></label><input id="settingsVolume" type="range" min="0" max="127" value="32"></div>
+ <div class="settings-group"><div class="setting-row"><div><strong>CD reflections</strong><small>Rainbow colours shift when you scroll; enable tilt if supported</small></div><button id="tiltShimmer" class="tertiary" type="button" aria-pressed="false">Enable tilt</button></div></div>
  <div class="settings-group"><div class="setting-row"><div><strong>Low-power mode</strong><small>Currently controlled on the frame</small></div><span id="quietState" class="pill">—</span></div><p class="hint">In BLE-quiet mode the remote cannot wake the display. This app intentionally does not offer a remote sleep command until a reliable wake mechanism is in place.</p></div>
  <div class="settings-group"><div class="setting-row"><div><strong>Remote connection</strong><small id="deviceName">Not connected</small></div><button id="settingsDisconnect" type="button" class="tertiary">Disconnect</button></div></div>
  <p class="hint">Production app · Diagnostics and bench-test commands are deliberately excluded.</p>

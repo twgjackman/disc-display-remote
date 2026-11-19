@@ -1,4 +1,4 @@
-# Disc Display Remote — production v1.3
+# Disc Display Remote — production v1.4
 
 A mobile-first, offline-capable progressive web app controlling the physical Gregg Jackman framed disc collection over Web Bluetooth. Production source deliberately contains no BLE debug/log/serial/board-test controls.
 
@@ -48,3 +48,12 @@ This webapp does not stream sound from the phone; it controls the frame's microS
 - Visible physical disc numbers removed from interface labels, tooltips and metadata; numeric slot IDs remain private BLE protocol details.
 - Stereo meter animation uses an absolute-height green -> yellow -> orange -> red gradient. Lower green readings do not show higher-level colours. Meter movement is illustrative, not derived from audio sample levels.
 - Original generated blank CD underside art was created for this project, and cached offline. The previous brushed metal disc image remains in the repository history.
+
+## v1.4 detail fixes
+- Removed the visible percentage beneath the vertical Now Playing volume slider. The native range input remains fully labelled for assistive technology.
+- Track numbers displayed in Now Playing and track search are calculated from the source listing. A combined recording explicitly containing the next track number is labelled as a range (e.g. 03–04), and the following entry advances to 05. Audio file indices and catalogue titles are left unchanged.
+- Reversed multi-platinum layers: printed album artwork is now the top/front disc in both orientations, and reflective jewel-side CDs project below in portrait or to the right in landscape. Portrait column bottoms align to the entire final stack, not just the printed artwork.
+- Reflective CD iridescence changes with vertical scrolling. An optional **Enable tilt** action in Settings activates motion input where the browser permits it, requesting sensor permission only on user interaction when required; scrolling always works. Motion preference is respected.
+- Grammy/e-ink square proxy now shows the active ring when any non-disc album (58–61) is selected.
+- The Live Albums modal is centred in landscape with visible borders and safe-height scrolling.
+- No new ESP32 or BLE commands; no diagnostics in production.
