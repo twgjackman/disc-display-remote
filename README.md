@@ -1,4 +1,4 @@
-# Disc Display Remote — production v1.6
+# Disc Display Remote — production v1.7
 
 A mobile-first, offline-capable progressive web app controlling the physical Gregg Jackman framed disc collection over Web Bluetooth. Production source deliberately contains no BLE debug/log/serial/board-test controls.
 
@@ -79,3 +79,13 @@ This webapp does not stream sound from the phone; it controls the frame's microS
 - Matching album disc artwork is shown beside grouped track search results, rather than repeating the disc for each track.
 - Disc artwork in the physical-frame/portrait collections is drawn fractionally inset within certification-colour backings. This prevents selection rings from covering the art and avoids transparent gaps; selection outlines attach to the backing rather than the picture.
 - No change to firmware/BLE command set or diagnostic-free production policy.
+
+## v1.7 corrections
+- The frame footer uses explicitly assigned grid columns. When Now Playing is hidden in E-ink/LED modes, the plaque stays in the exact centre and the gear remains in the far-right corner.
+- Landscape Now Playing returns to a simple left column for artwork, playback and volume, and right column for **inline Info above Tracks**. The right-hand Tracks panel scrolls independently.
+- Combined-number track entries preserve the display range (e.g. 03–04) but remove corresponding redundant embedded numbers from display titles (e.g. Tracy Chapman – Born to Fight & Tracy Chapman – Freedom Now). Raw track listings and WAV indices are untouched. Titles such as 4 AM remain intact.
+- The connection icon now uses a centred SVG instead of an offset typographic record glyph.
+- The connected landscape app is constrained to the visual viewport. Its columns scroll internally on small-height screens instead of overflowing the page.
+- Removed the user-visible production/diagnostics footer from Settings.
+- The portrait Now Playing grabber uses approximately 92% of the available header width.
+- The circular picture-disc sprites from the supplied PowerPoint **already contain** black, white and gold certification borders, including printed rim text. v1.6 added a duplicate CSS backing rim; v1.7 removes it and uses the original complete artwork with circular selection highlights aligned to the original image bounds. No firmware/BLE protocol commands were changed.

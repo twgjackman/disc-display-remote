@@ -1,4 +1,4 @@
-/* Disc Display Remote production v1.6 — no diagnostic or bench-test protocol */
+/* Disc Display Remote production v1.7 — no diagnostic or bench-test protocol */
 'use strict';
 const SERVICE='aba54e10-58de-4f40-b0c8-d65de1250001';
 const COMMAND='aba54e10-58de-4f40-b0c8-d65de1250002';
@@ -166,11 +166,11 @@ function discButton(n,variant){
   b.addEventListener('click',()=>openDialog('liveDialog'));return b;
  }
  b.setAttribute('aria-label','Select '+albumName(n));b.title=albumName(n);
- b.style.setProperty('--credit-ring',albumRingColour(n));
+ // The PowerPoint-derived disc sprites already include the certified-colour rim.
+ // Do not draw a second CSS ring over or beneath that artwork.
  for(let i=0;i<blankCount(n);i++){
   const blank=document.createElement('span');blank.className='platinum-blank';b.append(blank);
  }
- const ring=document.createElement('span');ring.className='disc-ring';ring.setAttribute('aria-hidden','true');b.append(ring);
  b.append(discElement(n,'disc-main'));
  b.addEventListener('click',()=>selectAlbum(n));return b;
 }
@@ -193,10 +193,8 @@ function layoutLandscapeFrame(){
   for(const b of row.children){
    const n=Number(b.dataset.slot),layers=blankCount(n),shift=layers*D*.13;
    b.style.width=D+shift+'px';b.style.height=D+'px';b.style.setProperty('--disc-size',D+'px');
-   const ring=b.querySelector('.disc-ring');
-   if(ring){ring.style.left=shift+'px';ring.style.top='0px';}
    const art=b.querySelector('.disc-main,.grammy-art');
-   if(art){const inset=ring?D*.012:0;art.style.left=(shift+inset)+'px';art.style.top=inset+'px';}
+   if(art){art.style.left=shift+'px';art.style.top='0px';}
    b.querySelectorAll('.platinum-blank').forEach((x,i)=>{x.style.left=(i*D*.13)+'px';x.style.top='0px';});
   }
  }
@@ -228,10 +226,8 @@ function layoutPortraitGrid(){
    b.style.left='0px';b.style.top=(artY-upper)+'px';
    b.style.width=D+'px';b.style.height=(D+upper)+'px';
    b.style.setProperty('--disc-size',D+'px');
-   const ring=b.querySelector('.disc-ring');
-   if(ring){ring.style.left='0px';ring.style.top=upper+'px';}
    const art=b.querySelector('.disc-main,.grammy-art');
-   if(art){const inset=ring?D*.012:0;art.style.left=inset+'px';art.style.top=(upper+inset)+'px';}
+   if(art){art.style.left='0px';art.style.top=upper+'px';}
    b.querySelectorAll('.platinum-blank').forEach((el,j)=>{el.style.left='0px';el.style.top=j*step+'px';});
    if(i<row.length-1)artY+=D+gap+distributedGap+blankCount(row[i+1])*step;
   });
@@ -248,7 +244,13 @@ function renderMeta(){
  crop($('portraitDisc'),n);
  crop($('playerCover'),n);crop($('fullscreenCover'),n);$('artDialogTitle').textContent=(detail?.artist?detail.artist+' · ':'')+(detail?.title||name);
  $('albumLabel').textContent=n?(artist?artist+' · ':'')+title:'—';
- $('songTitle').textContent=state.title||((state.playing&&n)?title:'No track selected');
+ const sourceTracks=Array.isArray(detail?.tracks)?detail.tracks:[];
+ const playingIndex=Number(state.track)-1;
+ const currentSource=sourceTracks[playingIndex];
+ const currentLine=currentSource?numberedTrackRows(sourceTracks)[playingIndex]:null;
+ const liveTitle=state.title&&currentLine?.end>currentLine?.start&&
+   text(state.title)===text(currentSource?.title)?currentLine.displayTitle:state.title;
+ $('songTitle').textContent=liveTitle||((state.playing&&n)?title:'No track selected');
  $('songArtist').textContent=state.artist||artist||'—';
  $('modeCaption').textContent=['','E-ink display','LED display','Audio mode'][state.mode]||'Display';
  $('currentCaption').textContent=n?name:'No album selected';
@@ -267,14 +269,27 @@ function numberedTrackRows(tracks){
  let next=1;
  return tracks.map((record,index)=>{
   const title=text(record?.title);
-  const explicit=[...title.matchAll(/(?:^|[,;&]\s*|\s&\s)(0?[1-9]|[12]\d|3\d)\s+(?=[\p{L}])/gu)].map(m=>Number(m[1]));
+  const tokenPattern=/(^|[,;&]\s*|\s&\s)(0?[1-9]|[12]\d|3\d)\s+(?=[\p{L}])/gu;
+  const explicit=[...title.matchAll(tokenPattern)].map(m=>Number(m[2]));
   let last=next;
   if(explicit.includes(next+1)){
    const consecutive=explicit.filter(n=>n>next&&n<=next+6).sort((a,b)=>a-b);
    for(const n of consecutive){if(n===last+1)last=n;}
   }
   const label=last>next?pad(next)+'–'+pad(last):pad(next);
-  const result={record,index:index+1,label,start:next,end:last};
+  // Combined performances already show their full number range in the left
+  // column; strip ONLY those redundant embedded numbers from the title.
+  // Unrelated song titles such as "4 AM" must remain untouched.
+  let displayTitle=title;
+  if(last>next){
+   const mergedNumbers=new Set(Array.from({length:last-next+1},(_,i)=>next+i));
+   displayTitle=title.replace(tokenPattern,(whole,prefix,number)=>{
+    const n=Number(number);
+    if(!mergedNumbers.has(n))return whole;
+    mergedNumbers.delete(n);return prefix;
+   }).replace(/\s{2,}/g,' ').trim();
+  }
+  const result={record,index:index+1,label,start:next,end:last,displayTitle};
   next=last+1;return result;
  });
 }
@@ -336,7 +351,7 @@ function renderTracks(){
   const button=document.createElement('button');button.type='button';
   button.className='track-row'+(i===state.track?' active':'');
   const number=document.createElement('span');number.className='track-index';number.textContent=info?.label||pad(i);
-  const title=document.createElement('span');title.textContent=record?.title||(i===state.track&&state.title?state.title:'Track '+pad(i));
+  const title=document.createElement('span');title.textContent=info?.displayTitle||record?.title||(i===state.track&&state.title?state.title:'Track '+pad(i));
   button.append(number,title);
   button.title='Direct track selection requires a BLE firmware command';
   button.addEventListener('click',()=>{
@@ -544,7 +559,7 @@ function renderLibrary(){
  const src=staticAlbums.size?[...staticAlbums.values()].sort((a,b)=>a.slot-b.slot):[...state.catalogue.values()].sort((a,b)=>a.slot-b.slot);
  const albums=src.filter(a=>!q||[a.artist,a.title,a.name].some(v=>text(v).toLocaleLowerCase().includes(q)));
  const tracks=q?src.flatMap(a=>numberedTrackRows(Array.isArray(a.tracks)?a.tracks:[])
-  .map(t=>({album:a,title:t.record.title||'',index:t.index,label:t.label}))
+  .map(t=>({album:a,title:t.displayTitle||t.record.title||'',index:t.index,label:t.label}))
   .filter(t=>t.title.toLocaleLowerCase().includes(q))):[];
  root.append(searchHeading('Albums'+(q?' · '+albums.length:'')));
  let artist='';
