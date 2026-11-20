@@ -1,4 +1,4 @@
-/* Disc Display Remote production v1.5 — no diagnostic or bench-test protocol */
+/* Disc Display Remote production v1.6 — no diagnostic or bench-test protocol */
 'use strict';
 const SERVICE='aba54e10-58de-4f40-b0c8-d65de1250001';
 const COMMAND='aba54e10-58de-4f40-b0c8-d65de1250002';
@@ -51,126 +51,68 @@ const state={device:null,server:null,command:null,status:null,catalogueChar:null
  track:0,totalTracks:0,title:'',artist:'',printed:'',viewOverride:null,catalogue:new Map(),lastVolume:32};
 let sendChain=Promise.resolve(),volumeTimer,toastTimer,fetching=false,gesture=null,artAvailable=true;
 const decoder=new TextDecoder();const encoder=new TextEncoder();
-const shimmer={
- travel:0,gamma:0,beta:0,x:0,y:0,z:0,tilt:false,
- seenOrientation:false,seenMotion:false,lastSensor:0,lastReadout:0,
- lastTouchY:null,scrollPositions:new WeakMap(),raf:0
-};
-function currentPrismAngle(){
- const motion=shimmer.tilt?(shimmer.gamma*2.4+shimmer.beta*.75+shimmer.x*5-shimmer.y*1.7):0;
- return ((-10+shimmer.travel*.52+motion)%360+360)%360;
-}
+// Motion events are used automatically in supporting browsers (including Chrome
+// Android). Browsers requiring a separate user gesture may supply scroll-only
+// reflections; no Settings switch or permission prompt is displayed.
+const shimmer={travel:0,gamma:0,beta:0,x:0,y:0,z:0,raf:0,lastTouchY:null,scrollPositions:new WeakMap()};
 function scheduleShimmer(){
  if(shimmer.raf)return;
- shimmer.raf=window.requestAnimationFrame(()=>{
+ shimmer.raf=requestAnimationFrame(()=>{
   shimmer.raf=0;
-  const degrees=currentPrismAngle().toFixed(2)+'deg';
-  // Set the custom property on the discs themselves as well as the root,
-  // so inherited gradients stay live in browser/PWA compositor layers.
-  document.documentElement.style.setProperty('--prism-angle',degrees);
-  for(const disc of document.querySelectorAll('.platinum-blank'))disc.style.setProperty('--prism-angle',degrees);
+  const motion=shimmer.gamma*2.4+shimmer.beta*.75+shimmer.x*5-shimmer.y*1.7;
+  const angle=(((-10+shimmer.travel*.52+motion)%360)+360)%360;
+  const value=angle.toFixed(2)+'deg';
+  document.documentElement.style.setProperty('--prism-angle',value);
+  for(const disc of document.querySelectorAll('.platinum-blank'))disc.style.setProperty('--prism-angle',value);
  });
 }
-function addShimmerTravel(delta){
- if(!Number.isFinite(delta)||Math.abs(delta)<.04)return;
- shimmer.travel+=delta;scheduleShimmer();
-}
-function showMotionReading(){
- const element=$('motionReading');if(!element)return;
- if(!shimmer.tilt){
-  element.textContent='Motion sensing is off · Scroll to change the reflections.';return;
- }
- if(!shimmer.seenOrientation&&!shimmer.seenMotion){
-  element.textContent='Motion enabled · Listening for phone sensors…';return;
- }
- const tilt='Tilt '+Math.round(shimmer.gamma)+'° / '+Math.round(shimmer.beta)+'°';
- const accel=shimmer.seenMotion?' · Accelerometer X '+shimmer.x.toFixed(1)+', Y '+shimmer.y.toFixed(1)+', Z '+shimmer.z.toFixed(1)+' m/s²':' · Accelerometer unavailable';
- element.textContent=tilt+accel;
+function addShimmerTravel(distance){
+ if(!Number.isFinite(distance)||Math.abs(distance)<.04)return;
+ shimmer.travel+=distance;scheduleShimmer();
 }
 function initShimmer(){
  let lastWindowY=window.scrollY||0;
  window.addEventListener('scroll',()=>{
-  const now=window.scrollY||document.documentElement.scrollTop||0;
-  addShimmerTravel(now-lastWindowY);lastWindowY=now;
+  const current=window.scrollY||document.documentElement.scrollTop||0;
+  addShimmerTravel(current-lastWindowY);lastWindowY=current;
  },{passive:true});
  document.addEventListener('scroll',event=>{
-  const target=event.target;
-  if(!target||target===document||target===document.documentElement||!('scrollTop'in target))return;
-  const value=Number(target.scrollTop)||0;
-  const last=shimmer.scrollPositions.get(target);
-  if(Number.isFinite(last))addShimmerTravel(value-last);
-  shimmer.scrollPositions.set(target,value);
+  const el=event.target;
+  if(!el||el===document||el===document.documentElement||!('scrollTop'in el))return;
+  const current=Number(el.scrollTop)||0,previous=shimmer.scrollPositions.get(el);
+  if(Number.isFinite(previous))addShimmerTravel(current-previous);
+  shimmer.scrollPositions.set(el,current);
  },{capture:true,passive:true});
- // Wheel and touch movement make the effect visible even when a frame or
- // drawer happens to fit exactly within the viewport and cannot scroll.
  window.addEventListener('wheel',event=>addShimmerTravel(event.deltaY*.35),{passive:true});
  document.addEventListener('touchstart',event=>{
   if(event.touches.length===1)shimmer.lastTouchY=event.touches[0].clientY;
  },{passive:true});
  document.addEventListener('touchmove',event=>{
   if(event.touches.length!==1||shimmer.lastTouchY===null)return;
-  const y=event.touches[0].clientY;
-  addShimmerTravel((shimmer.lastTouchY-y)*.32);shimmer.lastTouchY=y;
+  const current=event.touches[0].clientY;
+  addShimmerTravel((shimmer.lastTouchY-current)*.32);shimmer.lastTouchY=current;
  },{passive:true});
  document.addEventListener('touchend',()=>{shimmer.lastTouchY=null},{passive:true});
- const frame=$('frameStage');
- frame?.addEventListener('pointermove',event=>{
+ $('frameStage')?.addEventListener('pointermove',event=>{
   if(event.pointerType!=='mouse')return;
-  const bounds=frame.getBoundingClientRect();
+  const bounds=event.currentTarget.getBoundingClientRect();
   addShimmerTravel((event.clientX-bounds.left)/Math.max(1,bounds.width)*.9);
  },{passive:true});
  window.addEventListener('deviceorientation',event=>{
-  if(!shimmer.tilt)return;
   if(!Number.isFinite(event.gamma)&&!Number.isFinite(event.beta))return;
   shimmer.gamma=Number.isFinite(event.gamma)?event.gamma:0;
   shimmer.beta=Number.isFinite(event.beta)?event.beta:0;
-  shimmer.seenOrientation=true;shimmer.lastSensor=Date.now();
   scheduleShimmer();
-  if(Date.now()-shimmer.lastReadout>250){shimmer.lastReadout=Date.now();showMotionReading();}
  },{passive:true});
  window.addEventListener('devicemotion',event=>{
-  if(!shimmer.tilt)return;
-  const g=event.accelerationIncludingGravity||event.acceleration;
-  if(!g||![g.x,g.y,g.z].some(Number.isFinite))return;
-  shimmer.x=Number.isFinite(g.x)?g.x:0;
-  shimmer.y=Number.isFinite(g.y)?g.y:0;
-  shimmer.z=Number.isFinite(g.z)?g.z:0;
-  shimmer.seenMotion=true;shimmer.lastSensor=Date.now();
+  const vector=event.accelerationIncludingGravity||event.acceleration;
+  if(!vector||![vector.x,vector.y,vector.z].some(Number.isFinite))return;
+  shimmer.x=Number.isFinite(vector.x)?vector.x:0;
+  shimmer.y=Number.isFinite(vector.y)?vector.y:0;
+  shimmer.z=Number.isFinite(vector.z)?vector.z:0;
   scheduleShimmer();
-  if(Date.now()-shimmer.lastReadout>250){shimmer.lastReadout=Date.now();showMotionReading();}
  },{passive:true});
- scheduleShimmer();showMotionReading();
-}
-async function toggleTiltShimmer(){
- if(shimmer.tilt){
-  shimmer.tilt=false;shimmer.gamma=0;shimmer.beta=0;shimmer.x=0;shimmer.y=0;shimmer.z=0;
-  flash('Tilt effect off. Scrolling still changes the CD reflections.');
- }else{
-  if(typeof DeviceOrientationEvent==='undefined'&&typeof DeviceMotionEvent==='undefined'){
-   flash('Phone motion sensors are not available in this browser. Scroll shimmer still works.');return;
-  }
-  try{
-   // Both iOS permission calls must be initiated in the same button gesture.
-   const requests=[];
-   if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function')
-    requests.push(DeviceOrientationEvent.requestPermission());
-   if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function')
-    requests.push(DeviceMotionEvent.requestPermission());
-   const permissions=await Promise.all(requests);
-   if(permissions.length&&permissions.every(p=>p!=='granted')){
-    flash('Motion access was not granted. Scrolling still changes the reflections.');return;
-   }
-  }catch(error){flash('Motion permission unavailable: '+error.message);return;}
-  shimmer.tilt=true;shimmer.seenMotion=false;shimmer.seenOrientation=false;
-  flash('Tilt enabled. Motion readings will appear here when the phone supplies them.');
-  window.setTimeout(()=>{
-   if(shimmer.tilt&&!shimmer.seenMotion&&!shimmer.seenOrientation)
-    $('motionReading').textContent='No sensor readings received. Check browser motion permissions; scroll shimmer remains available.';
-  },4500);
- }
- $('tiltShimmer').textContent=shimmer.tilt?'Tilt on':'Enable tilt';
- $('tiltShimmer').setAttribute('aria-pressed',String(shimmer.tilt));
- showMotionReading();scheduleShimmer();
+ scheduleShimmer();
 }
 
 function flash(message){const el=$('toast');if(!el)return;el.textContent=message;el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('visible'),3200);}
@@ -203,7 +145,17 @@ function crop(el,n){
  el.style.backgroundPosition=(col/7*100)+'% '+(row/7*100)+'%';
  el.classList.toggle('special-cover',idx>=57&&el.id!=='playerCover');
 }
-function discElement(n,extra){const disc=document.createElement('div');disc.className='disc-image'+(extra?' '+extra:'');const inner=document.createElement('span');inner.textContent='◉';disc.append(inner);crop(disc,n);return disc;}
+function albumRingColour(n){
+ const credit=CREDIT[Number(n)];
+ return credit==='g'?'#edc54a':credit==='p'?'#f6f7f4':'#15191d';
+}
+function discElement(n,extra){
+ const disc=document.createElement('div');
+ disc.className='disc-image'+(extra?' '+extra:'');
+ disc.style.setProperty('--credit-ring',albumRingColour(n));
+ const inner=document.createElement('span');inner.textContent='◉';disc.append(inner);
+ crop(disc,n);return disc;
+}
 function discButton(n,variant){
  const b=document.createElement('button');b.type='button';
  b.className=variant+'-disc-button'+(n===58?' live-disc-button':'');
@@ -214,9 +166,11 @@ function discButton(n,variant){
   b.addEventListener('click',()=>openDialog('liveDialog'));return b;
  }
  b.setAttribute('aria-label','Select '+albumName(n));b.title=albumName(n);
+ b.style.setProperty('--credit-ring',albumRingColour(n));
  for(let i=0;i<blankCount(n);i++){
   const blank=document.createElement('span');blank.className='platinum-blank';b.append(blank);
  }
+ const ring=document.createElement('span');ring.className='disc-ring';ring.setAttribute('aria-hidden','true');b.append(ring);
  b.append(discElement(n,'disc-main'));
  b.addEventListener('click',()=>selectAlbum(n));return b;
 }
@@ -239,8 +193,10 @@ function layoutLandscapeFrame(){
   for(const b of row.children){
    const n=Number(b.dataset.slot),layers=blankCount(n),shift=layers*D*.13;
    b.style.width=D+shift+'px';b.style.height=D+'px';b.style.setProperty('--disc-size',D+'px');
+   const ring=b.querySelector('.disc-ring');
+   if(ring){ring.style.left=shift+'px';ring.style.top='0px';}
    const art=b.querySelector('.disc-main,.grammy-art');
-   if(art){art.style.left=shift+'px';art.style.top='0px';}
+   if(art){const inset=ring?D*.012:0;art.style.left=(shift+inset)+'px';art.style.top=inset+'px';}
    b.querySelectorAll('.platinum-blank').forEach((x,i)=>{x.style.left=(i*D*.13)+'px';x.style.top='0px';});
   }
  }
@@ -272,8 +228,10 @@ function layoutPortraitGrid(){
    b.style.left='0px';b.style.top=(artY-upper)+'px';
    b.style.width=D+'px';b.style.height=(D+upper)+'px';
    b.style.setProperty('--disc-size',D+'px');
+   const ring=b.querySelector('.disc-ring');
+   if(ring){ring.style.left='0px';ring.style.top=upper+'px';}
    const art=b.querySelector('.disc-main,.grammy-art');
-   if(art){art.style.left='0px';art.style.top=upper+'px';}
+   if(art){const inset=ring?D*.012:0;art.style.left=inset+'px';art.style.top=(upper+inset)+'px';}
    b.querySelectorAll('.platinum-blank').forEach((el,j)=>{el.style.left='0px';el.style.top=j*step+'px';});
    if(i<row.length-1)artY+=D+gap+distributedGap+blankCount(row[i+1])*step;
   });
@@ -320,45 +278,45 @@ function numberedTrackRows(tracks){
   next=last+1;return result;
  });
 }
+function roundedSignificantSales(value){
+ const amount=Number(value);
+ return Number.isFinite(amount)&&amount>0?Number(amount.toPrecision(3)):null;
+}
 function renderInfo(){
  const root=$('infoContent');if(!root)return;root.replaceChildren();
  const detail=salesInfo.get(Number(state.slot));
  if(!state.slot){
-  const p=document.createElement('p');p.className='muted';p.textContent='Choose an album to view its sales and certifications.';root.append(p);return;
+  const p=document.createElement('p');p.className='muted';
+  p.textContent='Choose an album to view certifications and sales.';root.append(p);return;
  }
  if(!detail){
   const p=document.createElement('p');p.className='muted';
-  p.textContent='No minimum-sales or certification figure is listed for this album in the supplied spreadsheet.';
-  root.append(p);return;
+  p.textContent='No sales or certification figures are listed for this album.';root.append(p);return;
  }
  const certs=Array.isArray(detail.certifications)?detail.certifications:[];
  if(certs.length){
   const grid=document.createElement('div');grid.className='info-certifications';
-  const sorted=[...certs].sort((a,b)=>{
-   const regionOrder={US:0,UK:1,Ireland:2,Canada:3,Germany:4,France:5,Netherlands:6,Italy:7};
-   return (regionOrder[a.region]??20)-(regionOrder[b.region]??20);
-  });
-  for(const cert of sorted){
+  const regionOrder={US:0,UK:1,Ireland:2,Canada:3,Germany:4,France:5,Netherlands:6,Italy:7};
+  for(const cert of [...certs].sort((a,b)=>(regionOrder[a.region]??20)-(regionOrder[b.region]??20))){
    const chip=document.createElement('span');chip.className='info-chip';
    chip.textContent=cert.region+' '+(cert.count>1?cert.count+'× ':'')+cert.award+(cert.kind==='single'?' · Single':'');
    grid.append(chip);
   }
   root.append(grid);
  }
- if(Number.isFinite(detail.roundedMinSales)){
+ const sales=roundedSignificantSales(detail.minSales);
+ if(sales!==null){
   const block=document.createElement('div');block.className='info-sales';
-  const number=document.createElement('strong');number.textContent=detail.roundedMinSales.toLocaleString('en-GB');
-  const small=document.createElement('span');small.textContent='Minimum sales';
-  block.append(number,small);root.append(block);
+  const number=document.createElement('strong');
+  number.textContent=sales.toLocaleString('en-GB',{maximumFractionDigits:0});
+  const label=document.createElement('span');label.textContent='Certified sales';
+  block.append(number,label);root.append(block);
  }
  for(const award of detail.awards||[]){
-  const item=document.createElement('p');item.className='info-award';
-  item.textContent=award;root.append(item);
+  const item=document.createElement('p');item.className='info-award';item.textContent=award;root.append(item);
  }
- const note=document.createElement('p');note.className='info-source';
- note.textContent='From Dad Record Sales.xlsx · Min sales rounded to the nearest 1,000.';
- root.append(note);
 }
+const collapsedTrackDiscs=new Map();
 function renderTracks(){
  const a=albumEntry(state.slot);
  const source=Array.isArray(a.tracks)?a.tracks:[];
@@ -370,21 +328,58 @@ function renderTracks(){
  tracksRenderKey=key;
  $('trackCount').textContent=total?(logical>total?logical+' tracks · '+total+' recordings':total+' tracks'):'Tracks unavailable';
  const target=$('trackList');target.replaceChildren();
- if(!total){const p=document.createElement('p');p.className='muted';p.textContent='No track listing is available for this album.';target.append(p);return;}
- let group='';
- for(let i=1;i<=Math.min(total,250);i++){
+ if(!total){
+  const p=document.createElement('p');p.className='muted';p.textContent='No track listing is available for this album.';target.append(p);return;
+ }
+ function makeRow(i){
   const info=numbered[i-1],record=source[i-1];
-  if(record?.group&&record.group!==group){
-   group=record.group;
-   const heading=document.createElement('p');heading.className='track-group';heading.textContent=group;target.append(heading);
-  }
-  const b=document.createElement('button');b.type='button';b.className='track-row'+(i===state.track?' active':'');
-  const id=document.createElement('span');id.className='track-index';id.textContent=info?.label||pad(i);
+  const button=document.createElement('button');button.type='button';
+  button.className='track-row'+(i===state.track?' active':'');
+  const number=document.createElement('span');number.className='track-index';number.textContent=info?.label||pad(i);
   const title=document.createElement('span');title.textContent=record?.title||(i===state.track&&state.title?state.title:'Track '+pad(i));
-  b.append(id,title);
-  b.title='View track in source listing; direct track selection is awaiting firmware support';
-  b.addEventListener('click',()=>{if(i!==state.track)flash('Direct track selection needs a BLE firmware command. Use Previous/Next for now.');});
-  target.append(b);
+  button.append(number,title);
+  button.title='Direct track selection requires a BLE firmware command';
+  button.addEventListener('click',()=>{
+   if(i!==state.track)flash('Direct track selection needs a BLE firmware command. Use Previous/Next for now.');
+  });
+  return button;
+ }
+ const groups=[];
+ for(let i=0;i<source.length;i++){
+  const name=source[i]?.group||'';
+  if(!groups.length||groups[groups.length-1].name!==name)groups.push({name,indices:[i+1]});
+  else groups[groups.length-1].indices.push(i+1);
+ }
+ // Only albums with more than one disc/section receive independent folding headers.
+ if(groups.length>1&&groups.some(g=>g.name)){
+  groups.forEach((group,gi)=>{
+   const foldKey=state.slot+':'+gi;
+   const open=collapsedTrackDiscs.get(foldKey)!==false;
+   const wrapper=document.createElement('section');wrapper.className='track-disc-group';
+   const header=document.createElement('button');header.type='button';
+   header.className='track-disc-toggle';header.setAttribute('aria-expanded',String(open));
+   const panelId='track-disc-'+state.slot+'-'+gi;header.setAttribute('aria-controls',panelId);
+   const label=document.createElement('span');label.className='track-disc-label';
+   const discName=document.createElement('strong');discName.textContent='Disc '+(gi+1);
+   label.append(discName);
+   if(group.name){const subtitle=document.createElement('small');subtitle.textContent=group.name;label.append(subtitle);}
+   const count=document.createElement('span');count.className='track-disc-count';
+   count.textContent=group.indices.length+' tracks';
+   const chevron=document.createElement('span');chevron.className='track-disc-chevron';chevron.textContent='⌄';
+   header.append(label,count,chevron);
+   const content=document.createElement('div');content.id=panelId;
+   content.className='track-disc-list';content.hidden=!open;
+   for(const i of group.indices)content.append(makeRow(i));
+   header.addEventListener('click',()=>{
+    const expanded=header.getAttribute('aria-expanded')==='true';
+    header.setAttribute('aria-expanded',String(!expanded));
+    content.hidden=expanded;
+    collapsedTrackDiscs.set(foldKey,expanded?false:true);
+   });
+   wrapper.append(header,content);target.append(wrapper);
+  });
+ }else{
+  for(let i=1;i<=Math.min(total,250);i++)target.append(makeRow(i));
  }
 }
 function renderSettings(){
@@ -547,34 +542,52 @@ function renderLibrary(){
  const q=text($('librarySearch').value).toLocaleLowerCase().trim();
  const root=$('libraryList');root.replaceChildren();
  const src=staticAlbums.size?[...staticAlbums.values()].sort((a,b)=>a.slot-b.slot):[...state.catalogue.values()].sort((a,b)=>a.slot-b.slot);
- const discs=src.filter(a=>!q||[a.artist,a.title,a.name].some(v=>text(v).toLocaleLowerCase().includes(q)));
- const matches=q?src.flatMap(a=>numberedTrackRows(Array.isArray(a.tracks)?a.tracks:[])
+ const albums=src.filter(a=>!q||[a.artist,a.title,a.name].some(v=>text(v).toLocaleLowerCase().includes(q)));
+ const tracks=q?src.flatMap(a=>numberedTrackRows(Array.isArray(a.tracks)?a.tracks:[])
   .map(t=>({album:a,title:t.record.title||'',index:t.index,label:t.label}))
   .filter(t=>t.title.toLocaleLowerCase().includes(q))):[];
- root.append(searchHeading('Albums'+(q?' · '+discs.length:'')));
+ root.append(searchHeading('Albums'+(q?' · '+albums.length:'')));
  let artist='';
- for(const a of discs){
-  const who=a.artist||'Other artists';
-  if(who!==artist){artist=who;root.append(searchHeading(who,'result-artist'));}
-  root.append(sheetRow(a.slot));
+ for(const album of albums){
+  const name=album.artist||'Other artists';
+  if(name!==artist){artist=name;root.append(searchHeading(name,'result-artist'));}
+  root.append(sheetRow(album.slot));
  }
- if(!discs.length){const p=document.createElement('p');p.className='no-result-line';p.textContent='No matching album or artist';root.append(p);}
+ if(!albums.length){
+  const p=document.createElement('p');p.className='no-result-line';p.textContent='No matching album or artist';root.append(p);
+ }
  if(q){
   root.append(Object.assign(document.createElement('hr'),{className:'search-divider'}));
-  root.append(searchHeading('Tracks · '+matches.length));
-  artist='';let album=-1;
-  for(const t of matches){
-   const who=t.album.artist||'Other artists';
+  root.append(searchHeading('Tracks · '+tracks.length));
+  artist='';let album=-1;let groupBody=null;
+  for(const match of tracks){
+   const who=match.album.artist||'Other artists';
    if(who!==artist){artist=who;album=-1;root.append(searchHeading(who,'result-artist'));}
-   if(t.album.slot!==album){album=t.album.slot;root.append(searchHeading(t.album.title||t.album.name,'result-album'));}
-   const b=document.createElement('button');b.type='button';b.className='search-track';
-   const n=document.createElement('span');n.textContent=t.label;
-   const title=document.createElement('span');title.textContent=t.title;b.append(n,title);
-   b.addEventListener('click',()=>{selectAlbum(t.album.slot);closeDialog('libraryDialog');flash('Album selected; jumping to a specific track needs a firmware command.');});
-   root.append(b);
+   if(match.album.slot!==album){
+    album=match.album.slot;
+    const group=document.createElement('div');group.className='search-album-group';
+    const artButton=document.createElement('button');artButton.type='button';artButton.className='search-album-thumb';
+    artButton.setAttribute('aria-label','Select '+(match.album.title||match.album.name));
+    artButton.append(discElement(match.album.slot,'search-track-disc'));
+    artButton.addEventListener('click',()=>selectAlbum(match.album.slot));
+    groupBody=document.createElement('div');groupBody.className='search-album-matches';
+    groupBody.append(searchHeading(match.album.title||match.album.name,'result-album'));
+    group.append(artButton,groupBody);root.append(group);
+   }
+   const button=document.createElement('button');button.type='button';button.className='search-track';
+   const number=document.createElement('span');number.textContent=match.label;
+   const title=document.createElement('span');title.textContent=match.title;
+   button.append(number,title);
+   button.addEventListener('click',()=>{
+    selectAlbum(match.album.slot);closeDialog('libraryDialog');
+    flash('Album selected; jumping to a specific track needs a firmware command.');
+   });
+   groupBody.append(button);
   }
-  if(!matches.length){const p=document.createElement('p');p.className='no-result-line';p.textContent='No matching track titles';root.append(p);}
-  root.classList.toggle('empty-search',!discs.length&&!matches.length);
+  if(!tracks.length){
+   const p=document.createElement('p');p.className='no-result-line';p.textContent='No matching track titles';root.append(p);
+  }
+  root.classList.toggle('empty-search',!albums.length&&!tracks.length);
  }else root.classList.remove('empty-search');
 }
 function renderLive(){const root=$('liveList');root.replaceChildren();let slots=[58,59,60,61];const detected=[...state.catalogue.keys()].filter(n=>n>57&&n<100);if(detected.length)slots=detected;for(const n of slots)root.append(sheetRow(n));}
@@ -593,13 +606,6 @@ function updateSearchViewport(){
   document.documentElement.style.setProperty('--search-vh',Math.max(140,Math.floor(vv.height))+'px');
   document.documentElement.style.setProperty('--search-top',Math.max(6,Math.floor(vv.offsetTop)+8)+'px');
  }
-}
-function toggleInfoPanel(panelId,contentId,buttonId){
- const panel=$(panelId),content=$(contentId),button=$(buttonId);
- const expanded=button.getAttribute('aria-expanded')==='true';
- button.setAttribute('aria-expanded',String(!expanded));
- content.hidden=expanded;
- panel.classList.toggle('collapsed',expanded);
 }
 function explainCarousel(){
  const mode=state.mode;
@@ -645,7 +651,6 @@ function setupCarouselHold(buttonId){
 }
 function wire(){
  initShimmer();
- $('tiltShimmer').addEventListener('click',toggleTiltShimmer);
  updateSearchViewport();
  if(window.visualViewport){
   window.visualViewport.addEventListener('resize',updateSearchViewport);
@@ -716,8 +721,6 @@ function wire(){
  setupCarouselHold('settingsCarousel');
  $('carouselHelpClose').addEventListener('click',()=>$('carouselHelpDialog').close());
  $('carouselHelpDialog').addEventListener('click',event=>{if(event.target===$('carouselHelpDialog'))$('carouselHelpDialog').close();});
- $('infoToggle').addEventListener('click',()=>toggleInfoPanel('infoPanel','infoContent','infoToggle'));
- $('tracksToggle').addEventListener('click',()=>toggleInfoPanel('tracksPanel','trackList','tracksToggle'));
  for(const b of document.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>{
   const m=Number(b.dataset.mode);state.mode=m;state.viewOverride=null;command('MODE:'+m);render();
  });

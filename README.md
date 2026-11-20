@@ -1,4 +1,4 @@
-# Disc Display Remote — production v1.5
+# Disc Display Remote — production v1.6
 
 A mobile-first, offline-capable progressive web app controlling the physical Gregg Jackman framed disc collection over Web Bluetooth. Production source deliberately contains no BLE debug/log/serial/board-test controls.
 
@@ -68,3 +68,14 @@ This webapp does not stream sound from the phone; it controls the frame's microS
 - Press and hold either Carousel control for ~550 ms to open a mode-aware explanation without changing its state. Short tap still toggles.
 - Portrait player sheet starts below the phone top edge, uses translucent glass styling, and keeps a full-width drag handle. Close X icons use centered SVG paths. Settings modal is centered with all four borders and viewport-safe height.
 - Production BLE command set remains unchanged; no diagnostic commands are exposed.
+
+## v1.6 changes
+- Now Playing Info is an inline, non-collapsible section beneath the transport controls in both orientations. The source/rounding footnote is removed.
+- Certified sales labels display the exact `minSales` data from the user's spreadsheet, formatted to three significant figures (e.g. 1,360,648 → 1,360,000), without rewriting the source data. Certification badges and awards remain.
+- Tracks box always remains open. Albums with multiple explicitly grouped disc sections in the bundled catalog (currently Pino Daniele's *Quando*, six sections) have individually collapsible, keyboard-accessible sections. Albums with one set of tracks show a flat list. Collapsed state is remembered per session during status updates.
+- In portrait the track panel stretches edge-to-edge within the Now Playing drawer while artwork, controls, and Info retain a comfortable maximum reading width.
+- Portrait Now Playing uses the drag handle without an X. Landscape retains its X to return to the frame.
+- Tilt-driven iridescence starts automatically where Chrome Android supplies orientation/accelerometer events; scrolling remains supported. The Settings motion toggle and readings were removed. On platforms requiring explicit permission, motion may remain unavailable until supported by the browser, but the scroll effect does not depend on it.
+- Matching album disc artwork is shown beside grouped track search results, rather than repeating the disc for each track.
+- Disc artwork in the physical-frame/portrait collections is drawn fractionally inset within certification-colour backings. This prevents selection rings from covering the art and avoids transparent gaps; selection outlines attach to the backing rather than the picture.
+- No change to firmware/BLE command set or diagnostic-free production policy.
