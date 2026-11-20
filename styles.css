@@ -1009,3 +1009,65 @@ dialog.art-dialog:not([open]){display:none}
  .art-dialog .fullscreen-cover{width:min(56vh,48vw,470px)!important;margin:8px auto 12px!important}
  .art-dialog-details{padding-bottom:24px}
 }
+/* v1.8.1 — curated special credits, portrait plaque, restored landscape
+   cover sizing and volume confined to artwork bounds. */
+.portrait-plaque{
+ display:flex;align-items:center;justify-content:center;
+ width:min(100%,520px);min-height:31px;margin:4px auto 3px;
+ padding:7px 12px;text-align:center;
+ background:linear-gradient(100deg,#dca933,#f6d985,#bd851c);
+ color:#1b1c1a;border-radius:3px;box-shadow:0 2px 5px #0007;
+ font-size:clamp(.75rem,2.8vw,.98rem);font-weight:800;line-height:1.2;
+ letter-spacing:.012em;
+}
+.info-lines{display:flex;flex-direction:column;gap:4px;max-width:100%}
+.info-lines .info-line{
+ margin:0;font-size:clamp(.78rem,1.8vmin,.91rem);
+ line-height:1.35;color:var(--text);overflow-wrap:break-word;
+}
+.info-lines .info-line:first-child{font-weight:750;color:var(--gold2)}
+@media(orientation:landscape){
+ body.connected.player-active{--landscape-art-size:min(43dvh,330px)}
+ body.connected.player-active .player-hero{
+  justify-content:space-between!important;
+  gap:clamp(3px,.8dvh,8px)!important;
+  padding:clamp(5px,1dvh,9px) 6px clamp(6px,1.1dvh,10px)!important;
+ }
+ body.connected.player-active .album-control-row{
+  width:min(100%,calc(var(--landscape-art-size) + 74px))!important;
+  max-width:min(100%,420px)!important;
+  align-items:stretch!important;flex:0 1 auto;
+ }
+ body.connected.player-active .art-zone{
+  max-width:var(--landscape-art-size)!important;
+ }
+ body.connected.player-active .vertical-volume,
+ body.connected.player-active .stereo-meters{
+  max-height:var(--landscape-art-size)!important;
+  height:100%!important;min-height:0!important;
+  box-sizing:border-box!important;align-self:stretch!important;
+ }
+ body.connected.player-active .vertical-volume{
+  padding:3px 0 10px!important;gap:4px!important;overflow:hidden!important;
+ }
+ body.connected.player-active .vertical-volume label{
+  flex:0 0 auto;line-height:1!important;
+ }
+ body.connected.player-active .vertical-volume #volumeSlider{
+  height:auto!important;min-height:0!important;
+  max-height:100%!important;flex:1 1 0!important;
+ }
+ body.connected.player-active .stereo-meters{padding:3px 0!important}
+ body.connected.player-active .playing-details{
+  flex:0 1 auto!important;padding:1px 2px!important;
+ }
+ body.connected.player-active .transport{
+  flex:0 0 auto!important;margin:2px auto!important;
+ }
+ body.connected.player-active .player-side .info-lines .info-line{
+  font-size:clamp(.72rem,1.65vmin,.85rem);line-height:1.32;
+ }
+}
+@media(orientation:landscape) and (max-height:370px){
+ body.connected.player-active{--landscape-art-size:min(37dvh,260px)}
+}

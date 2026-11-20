@@ -1,4 +1,4 @@
-/* Disc Display Remote production v1.8 — no diagnostic or bench-test protocol */
+/* Disc Display Remote production v1.8.1 — no diagnostic or bench-test protocol */
 'use strict';
 const SERVICE='aba54e10-58de-4f40-b0c8-d65de1250001';
 const COMMAND='aba54e10-58de-4f40-b0c8-d65de1250002';
@@ -317,6 +317,16 @@ function populateInfo(root,detail){
  if(!detail){
   const p=document.createElement('p');p.className='muted';
   p.textContent='No sales or certification figures are listed for this album.';root.append(p);return;
+ }
+ // Curated event and award credits for the special collection items.
+ if(Array.isArray(detail.displayLines)){
+  const list=document.createElement('div');list.className='info-lines';
+  for(const line of detail.displayLines){
+   if(typeof line!=='string'||!line.trim())continue;
+   const p=document.createElement('p');p.className='info-line';
+   p.textContent=line;list.append(p);
+  }
+  root.append(list);return;
  }
  const certs=Array.isArray(detail.certifications)?detail.certifications:[];
  if(certs.length){
