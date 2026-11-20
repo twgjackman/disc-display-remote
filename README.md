@@ -1,4 +1,4 @@
-# Disc Display Remote — production v1.4
+# Disc Display Remote — production v1.5
 
 A mobile-first, offline-capable progressive web app controlling the physical Gregg Jackman framed disc collection over Web Bluetooth. Production source deliberately contains no BLE debug/log/serial/board-test controls.
 
@@ -57,3 +57,14 @@ This webapp does not stream sound from the phone; it controls the frame's microS
 - Grammy/e-ink square proxy now shows the active ring when any non-disc album (58–61) is selected.
 - The Live Albums modal is centred in landscape with visible borders and safe-height scrolling.
 - No new ESP32 or BLE commands; no diagnostics in production.
+
+## v1.5 notes
+- Platinum stacks reverted to printed-album-at-bottom/front orientation. In portrait, silver jewel-side discs protrude above the printed album and all five columns align at the bottom of the last printed album. Landscape stacks protrude to the left.
+- Prism overlay contains exactly two diametrically opposite coloured arcs plus two small specular highlights. Animation is **input-driven**, not continuous: scroll, wheel and touch movement move the prism; phone orientation plus DeviceMotionEvent accelerationIncludingGravity contribute after tapping Enable tilt.
+- Settings shows live tilt angles and accelerometer X/Y/Z readings when browser permissions and sensors provide them. Motion APIs are best-effort, not guaranteed on all PWA browsers.
+- Portrait default header now says Browse Music, and the selected album no longer has the From the framed collection subtitle.
+- Now Playing has separate collapsible Info and Tracks panels. Both panels can be closed/opened from their headers. Info uses the exact album sequence from the uploaded Dad Record Sales.xlsx, Sheet1, with the 56 positive Min sales cells in column T mapped to album catalogue IDs 1–56. Values are rounded to nearest 1,000 for display; original values are stored in the separate JSON.
+- Sales and certification data unavailable in the workbook for Queen's Concerts (57) and the four special/live albums (58–61), so these display a missing-data note. Sheet certification counts are presented as UK for the unqualified Album/Singles H–J and C–E columns; other columns have explicitly named countries.
+- Press and hold either Carousel control for ~550 ms to open a mode-aware explanation without changing its state. Short tap still toggles.
+- Portrait player sheet starts below the phone top edge, uses translucent glass styling, and keeps a full-width drag handle. Close X icons use centered SVG paths. Settings modal is centered with all four borders and viewport-safe height.
+- Production BLE command set remains unchanged; no diagnostic commands are exposed.

@@ -1,4 +1,4 @@
-/* Disc Display Remote production v1.4 — no diagnostic or bench-test protocol */
+/* Disc Display Remote production v1.5 — no diagnostic or bench-test protocol */
 'use strict';
 const SERVICE='aba54e10-58de-4f40-b0c8-d65de1250001';
 const COMMAND='aba54e10-58de-4f40-b0c8-d65de1250002';
@@ -19,6 +19,20 @@ const BLANKS={3:3,10:4,13:1,20:1,23:2,26:1,28:1,44:1,45:4,48:1};
 const pendingSelection={slot:null,until:0};
 const blankCount=n=>BLANKS[n]||0;
 const staticAlbums=new Map();
+const salesInfo=new Map();
+async function loadSalesMetadata(){
+ try{
+  const response=await fetch('./assets/sales-info.json');
+  if(!response.ok)throw Error('Sales metadata '+response.status);
+  const data=await response.json();
+  for(const [key,value] of Object.entries(data.albums||{})){
+   const slot=Number(key);
+   if(Number.isInteger(slot)&&slot>=1&&slot<=61)salesInfo.set(slot,value);
+  }
+  renderInfo();
+ }catch(error){console.warn('Sales metadata unavailable',error);renderInfo();}
+}
+
 let tracksRenderKey='';
 async function loadAlbumMetadata(){
  try{
@@ -37,47 +51,126 @@ const state={device:null,server:null,command:null,status:null,catalogueChar:null
  track:0,totalTracks:0,title:'',artist:'',printed:'',viewOverride:null,catalogue:new Map(),lastVolume:32};
 let sendChain=Promise.resolve(),volumeTimer,toastTimer,fetching=false,gesture=null,artAvailable=true;
 const decoder=new TextDecoder();const encoder=new TextEncoder();
-const shimmer={scroll:0,gamma:0,beta:0,tilt:false,raf:0};
+const shimmer={
+ travel:0,gamma:0,beta:0,x:0,y:0,z:0,tilt:false,
+ seenOrientation:false,seenMotion:false,lastSensor:0,lastReadout:0,
+ lastTouchY:null,scrollPositions:new WeakMap(),raf:0
+};
+function currentPrismAngle(){
+ const motion=shimmer.tilt?(shimmer.gamma*2.4+shimmer.beta*.75+shimmer.x*5-shimmer.y*1.7):0;
+ return ((-10+shimmer.travel*.52+motion)%360+360)%360;
+}
 function scheduleShimmer(){
- if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
  if(shimmer.raf)return;
  shimmer.raf=window.requestAnimationFrame(()=>{
   shimmer.raf=0;
-  const angle=(25+shimmer.scroll*.39+(shimmer.tilt?shimmer.gamma*2.1+shimmer.beta*.75:0))%360;
-  document.documentElement.style.setProperty('--iridescence-angle',angle.toFixed(2)+'deg');
+  const degrees=currentPrismAngle().toFixed(2)+'deg';
+  // Set the custom property on the discs themselves as well as the root,
+  // so inherited gradients stay live in browser/PWA compositor layers.
+  document.documentElement.style.setProperty('--prism-angle',degrees);
+  for(const disc of document.querySelectorAll('.platinum-blank'))disc.style.setProperty('--prism-angle',degrees);
  });
 }
+function addShimmerTravel(delta){
+ if(!Number.isFinite(delta)||Math.abs(delta)<.04)return;
+ shimmer.travel+=delta;scheduleShimmer();
+}
+function showMotionReading(){
+ const element=$('motionReading');if(!element)return;
+ if(!shimmer.tilt){
+  element.textContent='Motion sensing is off · Scroll to change the reflections.';return;
+ }
+ if(!shimmer.seenOrientation&&!shimmer.seenMotion){
+  element.textContent='Motion enabled · Listening for phone sensors…';return;
+ }
+ const tilt='Tilt '+Math.round(shimmer.gamma)+'° / '+Math.round(shimmer.beta)+'°';
+ const accel=shimmer.seenMotion?' · Accelerometer X '+shimmer.x.toFixed(1)+', Y '+shimmer.y.toFixed(1)+', Z '+shimmer.z.toFixed(1)+' m/s²':' · Accelerometer unavailable';
+ element.textContent=tilt+accel;
+}
 function initShimmer(){
- const onScroll=()=>{
-  shimmer.scroll=Math.max(0,window.scrollY||document.documentElement.scrollTop||0);
-  scheduleShimmer();
- };
- window.addEventListener('scroll',onScroll,{passive:true});
- window.addEventListener('deviceorientation',e=>{
-  if(!shimmer.tilt)return;
-  if(!Number.isFinite(e.gamma)&&!Number.isFinite(e.beta))return;
-  shimmer.gamma=Number.isFinite(e.gamma)?e.gamma:0;
-  shimmer.beta=Number.isFinite(e.beta)?e.beta:0;
-  scheduleShimmer();
+ let lastWindowY=window.scrollY||0;
+ window.addEventListener('scroll',()=>{
+  const now=window.scrollY||document.documentElement.scrollTop||0;
+  addShimmerTravel(now-lastWindowY);lastWindowY=now;
  },{passive:true});
- onScroll();
+ document.addEventListener('scroll',event=>{
+  const target=event.target;
+  if(!target||target===document||target===document.documentElement||!('scrollTop'in target))return;
+  const value=Number(target.scrollTop)||0;
+  const last=shimmer.scrollPositions.get(target);
+  if(Number.isFinite(last))addShimmerTravel(value-last);
+  shimmer.scrollPositions.set(target,value);
+ },{capture:true,passive:true});
+ // Wheel and touch movement make the effect visible even when a frame or
+ // drawer happens to fit exactly within the viewport and cannot scroll.
+ window.addEventListener('wheel',event=>addShimmerTravel(event.deltaY*.35),{passive:true});
+ document.addEventListener('touchstart',event=>{
+  if(event.touches.length===1)shimmer.lastTouchY=event.touches[0].clientY;
+ },{passive:true});
+ document.addEventListener('touchmove',event=>{
+  if(event.touches.length!==1||shimmer.lastTouchY===null)return;
+  const y=event.touches[0].clientY;
+  addShimmerTravel((shimmer.lastTouchY-y)*.32);shimmer.lastTouchY=y;
+ },{passive:true});
+ document.addEventListener('touchend',()=>{shimmer.lastTouchY=null},{passive:true});
+ const frame=$('frameStage');
+ frame?.addEventListener('pointermove',event=>{
+  if(event.pointerType!=='mouse')return;
+  const bounds=frame.getBoundingClientRect();
+  addShimmerTravel((event.clientX-bounds.left)/Math.max(1,bounds.width)*.9);
+ },{passive:true});
+ window.addEventListener('deviceorientation',event=>{
+  if(!shimmer.tilt)return;
+  if(!Number.isFinite(event.gamma)&&!Number.isFinite(event.beta))return;
+  shimmer.gamma=Number.isFinite(event.gamma)?event.gamma:0;
+  shimmer.beta=Number.isFinite(event.beta)?event.beta:0;
+  shimmer.seenOrientation=true;shimmer.lastSensor=Date.now();
+  scheduleShimmer();
+  if(Date.now()-shimmer.lastReadout>250){shimmer.lastReadout=Date.now();showMotionReading();}
+ },{passive:true});
+ window.addEventListener('devicemotion',event=>{
+  if(!shimmer.tilt)return;
+  const g=event.accelerationIncludingGravity||event.acceleration;
+  if(!g||![g.x,g.y,g.z].some(Number.isFinite))return;
+  shimmer.x=Number.isFinite(g.x)?g.x:0;
+  shimmer.y=Number.isFinite(g.y)?g.y:0;
+  shimmer.z=Number.isFinite(g.z)?g.z:0;
+  shimmer.seenMotion=true;shimmer.lastSensor=Date.now();
+  scheduleShimmer();
+  if(Date.now()-shimmer.lastReadout>250){shimmer.lastReadout=Date.now();showMotionReading();}
+ },{passive:true});
+ scheduleShimmer();showMotionReading();
 }
 async function toggleTiltShimmer(){
  if(shimmer.tilt){
-  shimmer.tilt=false;shimmer.gamma=0;shimmer.beta=0;flash('Tilt effect off. Scroll shimmer stays active.');
+  shimmer.tilt=false;shimmer.gamma=0;shimmer.beta=0;shimmer.x=0;shimmer.y=0;shimmer.z=0;
+  flash('Tilt effect off. Scrolling still changes the CD reflections.');
  }else{
-  if(typeof DeviceOrientationEvent==='undefined'){flash('Motion sensors are unavailable here. Scroll still changes the colours.');return;}
-  if(typeof DeviceOrientationEvent.requestPermission==='function'){
-   try{
-    const permission=await DeviceOrientationEvent.requestPermission();
-    if(permission!=='granted'){flash('Tilt permission was not granted. Scroll shimmer remains available.');return;}
-   }catch(error){flash('Tilt permission unavailable: '+error.message);return;}
+  if(typeof DeviceOrientationEvent==='undefined'&&typeof DeviceMotionEvent==='undefined'){
+   flash('Phone motion sensors are not available in this browser. Scroll shimmer still works.');return;
   }
-  shimmer.tilt=true;flash('Tilt shimmer enabled where motion sensors are available.');
+  try{
+   // Both iOS permission calls must be initiated in the same button gesture.
+   const requests=[];
+   if(typeof DeviceOrientationEvent!=='undefined'&&typeof DeviceOrientationEvent.requestPermission==='function')
+    requests.push(DeviceOrientationEvent.requestPermission());
+   if(typeof DeviceMotionEvent!=='undefined'&&typeof DeviceMotionEvent.requestPermission==='function')
+    requests.push(DeviceMotionEvent.requestPermission());
+   const permissions=await Promise.all(requests);
+   if(permissions.length&&permissions.every(p=>p!=='granted')){
+    flash('Motion access was not granted. Scrolling still changes the reflections.');return;
+   }
+  }catch(error){flash('Motion permission unavailable: '+error.message);return;}
+  shimmer.tilt=true;shimmer.seenMotion=false;shimmer.seenOrientation=false;
+  flash('Tilt enabled. Motion readings will appear here when the phone supplies them.');
+  window.setTimeout(()=>{
+   if(shimmer.tilt&&!shimmer.seenMotion&&!shimmer.seenOrientation)
+    $('motionReading').textContent='No sensor readings received. Check browser motion permissions; scroll shimmer remains available.';
+  },4500);
  }
  $('tiltShimmer').textContent=shimmer.tilt?'Tilt on':'Enable tilt';
  $('tiltShimmer').setAttribute('aria-pressed',String(shimmer.tilt));
- scheduleShimmer();
+ showMotionReading();scheduleShimmer();
 }
 
 function flash(message){const el=$('toast');if(!el)return;el.textContent=message;el.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('visible'),3200);}
@@ -144,11 +237,11 @@ function layoutLandscapeFrame(){
  for(const row of root.children){
   row.style.height=H/5+'px';
   for(const b of row.children){
-   const n=Number(b.dataset.slot),step=D*.13,layers=blankCount(n);
-   b.style.width=D+layers*step+'px';b.style.height=D+'px';b.style.setProperty('--disc-size',D+'px');
+   const n=Number(b.dataset.slot),layers=blankCount(n),shift=layers*D*.13;
+   b.style.width=D+shift+'px';b.style.height=D+'px';b.style.setProperty('--disc-size',D+'px');
    const art=b.querySelector('.disc-main,.grammy-art');
-   if(art){art.style.left='0px';art.style.top='0px';}
-   b.querySelectorAll('.platinum-blank').forEach((x,i)=>{x.style.left=(i+1)*step+'px';x.style.top='0px';});
+   if(art){art.style.left=shift+'px';art.style.top='0px';}
+   b.querySelectorAll('.platinum-blank').forEach((x,i)=>{x.style.left=(i*D*.13)+'px';x.style.top='0px';});
   }
  }
 }
@@ -164,24 +257,25 @@ function layoutPortraitGrid(){
  const grid=$('portraitGrid');if(!grid?.clientWidth||!grid.children.length)return;
  const D=Math.max(26,Math.floor((grid.clientWidth-18)/5));
  const step=D*.155,gap=Math.max(3,D*.045);
- // Printed artwork is the TOP disc. Reflective undersides step downward,
- // exposing each lower edge. Align the bottom of each entire final stack.
- const heights=FRAME_ROWS.map(row=>row.map(n=>D+blankCount(n)*step));
- const minima=heights.map(h=>h.reduce((sum,x)=>sum+x,0)+(h.length-1)*gap);
- const totalHeight=Math.ceil(Math.max(...minima))+2;
+ // Reflective CDs expose their upper edges; printed artwork sits at the
+ // bottom/front of each stack. All five final printed discs end level.
+ const minima=FRAME_ROWS.map(row=>row.slice(1).reduce((sum,n)=>sum+D+gap+blankCount(n)*step,0));
+ const lastCoverY=Math.max(...minima);
+ const totalHeight=Math.ceil(lastCoverY+D+2);
  grid.style.height=totalHeight+'px';grid.style.setProperty('--portrait-disc-size',D+'px');
  FRAME_ROWS.forEach((row,ri)=>{
   const buttons=[...grid.children[ri].children];
-  const extra=(totalHeight-2-minima[ri])/Math.max(1,row.length-1);
-  let top=0;
+  const distributedGap=(lastCoverY-minima[ri])/Math.max(1,row.length-1);
+  let artY=0;
   buttons.forEach((b,i)=>{
-   const n=row[i],layers=blankCount(n);
-   b.style.left='0px';b.style.top=top+'px';b.style.width=D+'px';
-   b.style.height=(D+layers*step)+'px';b.style.setProperty('--disc-size',D+'px');
+   const n=row[i],layers=blankCount(n),upper=layers*step;
+   b.style.left='0px';b.style.top=(artY-upper)+'px';
+   b.style.width=D+'px';b.style.height=(D+upper)+'px';
+   b.style.setProperty('--disc-size',D+'px');
    const art=b.querySelector('.disc-main,.grammy-art');
-   if(art){art.style.left='0px';art.style.top='0px';}
-   b.querySelectorAll('.platinum-blank').forEach((el,j)=>{el.style.left='0px';el.style.top=(j+1)*step+'px';});
-   if(i<row.length-1)top+=D+layers*step+gap+extra;
+   if(art){art.style.left='0px';art.style.top=upper+'px';}
+   b.querySelectorAll('.platinum-blank').forEach((el,j)=>{el.style.left='0px';el.style.top=j*step+'px';});
+   if(i<row.length-1)artY+=D+gap+distributedGap+blankCount(row[i+1])*step;
   });
  });
 }
@@ -192,7 +286,7 @@ function renderMeta(){
  const title=detail?.title||name;
  $('portraitAlbum').textContent=n?title:'Choose a disc';
  $('portraitArtist').textContent=n?(artist?artist+year:'Album selected'):'Tap an album in the collection';
- $('portraitMeta').textContent=n>=58?'Live / special album':(n?'From the framed collection':'Choose an album from the collection');
+ $('portraitMeta').textContent=n>=58?'Live / special album':'';
  crop($('portraitDisc'),n);
  crop($('playerCover'),n);crop($('fullscreenCover'),n);$('artDialogTitle').textContent=(detail?.artist?detail.artist+' · ':'')+(detail?.title||name);
  $('albumLabel').textContent=n?(artist?artist+' · ':'')+title:'—';
@@ -200,6 +294,7 @@ function renderMeta(){
  $('songArtist').textContent=state.artist||artist||'—';
  $('modeCaption').textContent=['','E-ink display','LED display','Audio mode'][state.mode]||'Display';
  $('currentCaption').textContent=n?name:'No album selected';
+ renderInfo();
  for(const b of document.querySelectorAll('.frame-disc-button,.portrait-disc-button')){
  const displayed=Number(b.dataset.slot);
  const active=displayed===(n>=58?58:n);
@@ -224,6 +319,45 @@ function numberedTrackRows(tracks){
   const result={record,index:index+1,label,start:next,end:last};
   next=last+1;return result;
  });
+}
+function renderInfo(){
+ const root=$('infoContent');if(!root)return;root.replaceChildren();
+ const detail=salesInfo.get(Number(state.slot));
+ if(!state.slot){
+  const p=document.createElement('p');p.className='muted';p.textContent='Choose an album to view its sales and certifications.';root.append(p);return;
+ }
+ if(!detail){
+  const p=document.createElement('p');p.className='muted';
+  p.textContent='No minimum-sales or certification figure is listed for this album in the supplied spreadsheet.';
+  root.append(p);return;
+ }
+ const certs=Array.isArray(detail.certifications)?detail.certifications:[];
+ if(certs.length){
+  const grid=document.createElement('div');grid.className='info-certifications';
+  const sorted=[...certs].sort((a,b)=>{
+   const regionOrder={US:0,UK:1,Ireland:2,Canada:3,Germany:4,France:5,Netherlands:6,Italy:7};
+   return (regionOrder[a.region]??20)-(regionOrder[b.region]??20);
+  });
+  for(const cert of sorted){
+   const chip=document.createElement('span');chip.className='info-chip';
+   chip.textContent=cert.region+' '+(cert.count>1?cert.count+'× ':'')+cert.award+(cert.kind==='single'?' · Single':'');
+   grid.append(chip);
+  }
+  root.append(grid);
+ }
+ if(Number.isFinite(detail.roundedMinSales)){
+  const block=document.createElement('div');block.className='info-sales';
+  const number=document.createElement('strong');number.textContent=detail.roundedMinSales.toLocaleString('en-GB');
+  const small=document.createElement('span');small.textContent='Minimum sales';
+  block.append(number,small);root.append(block);
+ }
+ for(const award of detail.awards||[]){
+  const item=document.createElement('p');item.className='info-award';
+  item.textContent=award;root.append(item);
+ }
+ const note=document.createElement('p');note.className='info-source';
+ note.textContent='From Dad Record Sales.xlsx · Min sales rounded to the nearest 1,000.';
+ root.append(note);
 }
 function renderTracks(){
  const a=albumEntry(state.slot);
@@ -460,6 +594,55 @@ function updateSearchViewport(){
   document.documentElement.style.setProperty('--search-top',Math.max(6,Math.floor(vv.offsetTop)+8)+'px');
  }
 }
+function toggleInfoPanel(panelId,contentId,buttonId){
+ const panel=$(panelId),content=$(contentId),button=$(buttonId);
+ const expanded=button.getAttribute('aria-expanded')==='true';
+ button.setAttribute('aria-expanded',String(!expanded));
+ content.hidden=expanded;
+ panel.classList.toggle('collapsed',expanded);
+}
+function explainCarousel(){
+ const mode=state.mode;
+ const title=mode===1?'Carousel · E-ink':mode===2?'Carousel · LED':'Carousel · Audio';
+ let description='';
+ if(mode===1){
+  description='When on, the display advances to the next album artwork automatically after the chosen interval. When off, it keeps the selected artwork. The interval starts at 60 minutes for each new carousel session.';
+ }else if(mode===2){
+  description='When on, the illuminated album selection advances automatically after the chosen interval. When off, the selected album stays active. The interval starts at 60 minutes for each new carousel session.';
+ }else{
+  description='When on, the next album starts when the current album finishes. There is no timed change in Audio mode. When off, the player does not automatically advance to the next album.';
+ }
+ $('carouselHelpTitle').textContent=title;
+ $('carouselHelpStatus').textContent=state.carousel?'Carousel is currently ON':'Carousel is currently OFF (play once)';
+ $('carouselHelpText').textContent=description;
+ const dlg=$('carouselHelpDialog');if(!dlg.open)dlg.showModal();
+}
+function setupCarouselHold(buttonId){
+ const button=$(buttonId);let timer=null,openedAt=0;
+ const cancel=()=>{if(timer!==null){clearTimeout(timer);timer=null;}};
+ button.addEventListener('pointerdown',event=>{
+  if(event.pointerType==='mouse'&&event.button!==0)return;
+  cancel();
+  timer=setTimeout(()=>{
+   timer=null;openedAt=Date.now();explainCarousel();
+  },550);
+ });
+ button.addEventListener('pointerup',cancel);
+ button.addEventListener('pointercancel',cancel);
+ button.addEventListener('pointerleave',cancel);
+ button.addEventListener('contextmenu',event=>{
+  event.preventDefault();cancel();openedAt=Date.now();explainCarousel();
+ });
+ button.addEventListener('click',event=>{
+  if(Date.now()-openedAt<900){event.preventDefault();event.stopPropagation();return;}
+  cancel();toggleCarousel();
+ });
+ button.addEventListener('keydown',event=>{
+  if(event.key==='F10'&&event.shiftKey){
+   event.preventDefault();cancel();openedAt=Date.now();explainCarousel();
+  }
+ });
+}
 function wire(){
  initShimmer();
  $('tiltShimmer').addEventListener('click',toggleTiltShimmer);
@@ -529,7 +712,12 @@ function wire(){
  $('playPause').addEventListener('click',setPlayback);
  $('previousTrack').addEventListener('click',()=>command('PREV'));
  $('nextTrack').addEventListener('click',()=>command('NEXTTRACK'));
- $('playerLoop').addEventListener('click',toggleCarousel);$('settingsCarousel').addEventListener('click',toggleCarousel);
+ setupCarouselHold('playerLoop');
+ setupCarouselHold('settingsCarousel');
+ $('carouselHelpClose').addEventListener('click',()=>$('carouselHelpDialog').close());
+ $('carouselHelpDialog').addEventListener('click',event=>{if(event.target===$('carouselHelpDialog'))$('carouselHelpDialog').close();});
+ $('infoToggle').addEventListener('click',()=>toggleInfoPanel('infoPanel','infoContent','infoToggle'));
+ $('tracksToggle').addEventListener('click',()=>toggleInfoPanel('tracksPanel','trackList','tracksToggle'));
  for(const b of document.querySelectorAll('[data-mode]'))b.addEventListener('click',()=>{
   const m=Number(b.dataset.mode);state.mode=m;state.viewOverride=null;command('MODE:'+m);render();
  });
@@ -554,7 +742,7 @@ function wire(){
  });
 }
 async function init(){
- loadCatalogue();buildFrame();buildPortraitGrid();wire();renderLibrary();renderLive();render();void loadAlbumMetadata();
+ loadCatalogue();buildFrame();buildPortraitGrid();wire();renderLibrary();renderLive();render();void loadAlbumMetadata();void loadSalesMetadata();
  if('serviceWorker'in navigator&&location.protocol==='https:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
  if(!navigator.bluetooth){$('gateMessage').textContent='Web Bluetooth is not supported in this browser. Use Chrome on Android or a compatible desktop browser over HTTPS.';}
  await reconnectGranted();
