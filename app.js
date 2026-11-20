@@ -1,4 +1,4 @@
-/* Disc Display Remote production v1.7 — no diagnostic or bench-test protocol */
+/* Disc Display Remote production v1.8 — no diagnostic or bench-test protocol */
 'use strict';
 const SERVICE='aba54e10-58de-4f40-b0c8-d65de1250001';
 const COMMAND='aba54e10-58de-4f40-b0c8-d65de1250002';
@@ -138,7 +138,7 @@ function crop(el,n){
  // use the PowerPoint's printed disc artwork, except slots 58..61,
  // which have no corresponding physical disc.
  const square=el.id==='playerCover'||el.id==='fullscreenCover'||idx>=57;
- const file=square?'covers-atlas.webp':'discs-v12.webp';
+ const file=square?'covers-atlas.webp':'discs-v18.webp';
  const col=idx%8,row=Math.floor(idx/8);
  el.style.backgroundImage='url("./assets/'+file+'")';
  el.style.backgroundSize='800% 800%';
@@ -243,6 +243,9 @@ function renderMeta(){
  $('portraitMeta').textContent=n>=58?'Live / special album':'';
  crop($('portraitDisc'),n);
  crop($('playerCover'),n);crop($('fullscreenCover'),n);$('artDialogTitle').textContent=(detail?.artist?detail.artist+' · ':'')+(detail?.title||name);
+ $('artDialogAlbum').textContent=n?(detail?.title||name):'Select an album';
+ $('artDialogArtist').textContent=n?([detail?.artist,detail?.year].filter(Boolean).join(' · ')):'';
+ $('portraitArtOpen').disabled=!n;
  $('albumLabel').textContent=n?(artist?artist+' · ':'')+title:'—';
  const sourceTracks=Array.isArray(detail?.tracks)?detail.tracks:[];
  const playingIndex=Number(state.track)-1;
@@ -297,9 +300,16 @@ function roundedSignificantSales(value){
  const amount=Number(value);
  return Number.isFinite(amount)&&amount>0?Number(amount.toPrecision(3)):null;
 }
-function renderInfo(){
- const root=$('infoContent');if(!root)return;root.replaceChildren();
- const detail=salesInfo.get(Number(state.slot));
+const CERT_REGION_ADJECTIVE={
+ Germany:'German',France:'French',Netherlands:'Dutch',
+ Italy:'Italian',Ireland:'Irish',Canada:'Canadian',
+ Spain:'Spanish',Belgium:'Belgian',Switzerland:'Swiss',
+ Austria:'Austrian',Sweden:'Swedish',Denmark:'Danish',
+ Norway:'Norwegian',Finland:'Finnish',Australia:'Australian',
+ 'New Zealand':'New Zealand',US:'US',UK:'UK'
+};
+function populateInfo(root,detail){
+ root.replaceChildren();
  if(!state.slot){
   const p=document.createElement('p');p.className='muted';
   p.textContent='Choose an album to view certifications and sales.';root.append(p);return;
@@ -314,7 +324,8 @@ function renderInfo(){
   const regionOrder={US:0,UK:1,Ireland:2,Canada:3,Germany:4,France:5,Netherlands:6,Italy:7};
   for(const cert of [...certs].sort((a,b)=>(regionOrder[a.region]??20)-(regionOrder[b.region]??20))){
    const chip=document.createElement('span');chip.className='info-chip';
-   chip.textContent=cert.region+' '+(cert.count>1?cert.count+'× ':'')+cert.award+(cert.kind==='single'?' · Single':'');
+   const region=CERT_REGION_ADJECTIVE[cert.region]||cert.region;
+   chip.textContent=region+' '+(cert.count>1?cert.count+'× ':'')+cert.award+(cert.kind==='single'?' · Single':'');
    grid.append(chip);
   }
   root.append(grid);
@@ -329,6 +340,12 @@ function renderInfo(){
  }
  for(const award of detail.awards||[]){
   const item=document.createElement('p');item.className='info-award';item.textContent=award;root.append(item);
+ }
+}
+function renderInfo(){
+ const detail=salesInfo.get(Number(state.slot));
+ for(const id of ['infoContent','artDialogInfo']){
+  const root=$(id);if(root)populateInfo(root,detail);
  }
 }
 const collapsedTrackDiscs=new Map();
@@ -729,6 +746,7 @@ function wire(){
   if(e.key==='Escape'){e.preventDefault();hidePlayer();}
  });
  $('artZone').addEventListener('click',()=>openDialog('artDialog'));
+ $('portraitArtOpen').addEventListener('click',()=>{if(state.slot)openDialog('artDialog');else flash('Choose an album to view its artwork.');});
  $('playPause').addEventListener('click',setPlayback);
  $('previousTrack').addEventListener('click',()=>command('PREV'));
  $('nextTrack').addEventListener('click',()=>command('NEXTTRACK'));

@@ -1,4 +1,4 @@
-# Disc Display Remote — production v1.7
+# Disc Display Remote — production v1.8
 
 A mobile-first, offline-capable progressive web app controlling the physical Gregg Jackman framed disc collection over Web Bluetooth. Production source deliberately contains no BLE debug/log/serial/board-test controls.
 
@@ -89,3 +89,10 @@ This webapp does not stream sound from the phone; it controls the frame's microS
 - Removed the user-visible production/diagnostics footer from Settings.
 - The portrait Now Playing grabber uses approximately 92% of the available header width.
 - The circular picture-disc sprites from the supplied PowerPoint **already contain** black, white and gold certification borders, including printed rim text. v1.6 added a duplicate CSS backing rim; v1.7 removes it and uses the original complete artwork with circular selection highlights aligned to the original image bounds. No firmware/BLE protocol commands were changed.
+
+## v1.8 refinements
+- The full circular album image atlas was rebuilt from the ORIGINAL `Discs 2x4.pptx` embedded pictures, with each image crop matched against the old atlas and the PowerPoint's own black/white/gold outline colour. The 57 circular artwork crops now have the thin certification rim **outside** the complete image instead of overlapping album artwork. The old asset remains in Git history; the app and offline cache load `assets/discs-v18.webp`.
+- The portrait default page hides the redundant current mode/album strip. Artist and year remain under the selected circular artwork.
+- Info badges now use adjective names for countries: German, French, Dutch, Italian, Irish, Canadian; US and UK remain as given.
+- Tap the selected circular album artwork in portrait to open the full-screen square album cover. The full-screen view includes album title, artist, year, the same certifications, three-significant-figure certified sales and awards shown in Now Playing.
+- Both the player artwork and the selected portrait art use the same full-screen dialog. No BLE firmware or command changes.

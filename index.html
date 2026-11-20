@@ -7,7 +7,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="icon" href="./icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="./styles.css">
-<title>Disc Display · v1.7</title>
+<title>Disc Display · v1.8</title>
 </head><body>
 <div id="app">
 <header class="topbar">
@@ -35,7 +35,7 @@
  </section>
  <section id="portraitPage" class="portrait-page" aria-label="Selected disc and collection">
    <div class="selected-caption"><span>SELECTED ALBUM</span></div>
-   <div class="portrait-hero"><div id="portraitDisc" class="disc-image large"><span>◉</span></div><h1 id="portraitAlbum">Your collection</h1><p id="portraitArtist">Choose a disc below</p><p id="portraitMeta" class="portrait-meta">Tap any disc to activate it on the frame.</p></div>
+   <div class="portrait-hero"><button id="portraitArtOpen" class="portrait-art-button" type="button" aria-label="View selected square album artwork and information"><div id="portraitDisc" class="disc-image large"><span>◉</span></div></button><h1 id="portraitAlbum">Your collection</h1><p id="portraitArtist">Choose a disc below</p><p id="portraitMeta" class="portrait-meta">Tap any disc to activate it on the frame.</p></div>
    <div class="section-heading"><h2>Browse Music</h2><button type="button" id="portraitSearch" class="tertiary" aria-label="Search discs and tracks"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg></button></div>
    <div id="portraitGrid" class="portrait-grid" aria-label="Five columns corresponding to the five rows of the physical frame"></div>
  </section>
@@ -91,7 +91,7 @@
  <p id="carouselHelpStatus" class="carousel-help-status"></p>
  <p id="carouselHelpText"></p>
 </dialog>
-<dialog id="artDialog" class="art-dialog"><div class="art-dialog-head"><strong id="artDialogTitle">Album artwork</strong><button class="icon-button close-dialog" data-close="artDialog" aria-label="Close full-screen artwork"><svg class="close-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg></button></div><div id="fullscreenCover" class="fullscreen-cover" role="img" aria-label="Full album artwork"></div></dialog>
+<dialog id="artDialog" class="art-dialog"><div class="art-dialog-head"><strong id="artDialogTitle">Album artwork</strong><button class="icon-button close-dialog" data-close="artDialog" aria-label="Close full-screen artwork"><svg class="close-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg></button></div><div id="fullscreenCover" class="fullscreen-cover" role="img" aria-label="Full album artwork"></div><section class="art-dialog-details" aria-label="Album details"><h2 id="artDialogAlbum"></h2><p id="artDialogArtist"></p><div id="artDialogInfo" class="art-dialog-info"></div></section></dialog>
 </div>
 <script src="./app.js" defer></script>
 </body></html>
